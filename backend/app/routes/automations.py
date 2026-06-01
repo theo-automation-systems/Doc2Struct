@@ -10,11 +10,13 @@ router = APIRouter(prefix="/automations", tags=["Automations"])
 
 
 class AutomationTemplate(BaseModel):
+    model_config = {"populate_by_name": True}
+
     id: str
     name: str
     description: str
     category: str
-    schema: dict[str, str]
+    extraction_schema: dict[str, str]
     status: str = "active"
     documents_processed: int = 0
 
