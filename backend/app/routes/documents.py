@@ -110,15 +110,17 @@ async def _save_doc(doc: DocumentMetadata, session: Optional[AsyncSession]) -> N
 
 
 async def _update_doc_fields(doc_id: str, session: Optional[AsyncSession], **fields) -> None:
+    # Serialise enum values to their string primitives for asyncpg compatibility
+    clean = {k: (v.value if hasattr(v, "value") else v) for k, v in fields.items()}
     if session:
         from ..models.orm import DocumentORM
         await session.execute(
-            update(DocumentORM).where(DocumentORM.id == doc_id).values(**fields)
+            update(DocumentORM).where(DocumentORM.id == doc_id).values(**clean)
         )
         await session.commit()
     else:
         if doc_id in _documents_store:
-            for k, v in fields.items():
+            for k, v in clean.items():
                 setattr(_documents_store[doc_id], k, v)
 
 
@@ -211,11 +213,19 @@ async def process_document_task(
 
         except Exception as exc:
             logger.exception(f"Processing failed for {doc_id}: {exc}")
-            await _update_doc_fields(
-                doc_id, session,
-                status=DocumentStatus.failed,
-                error_message=str(exc),
-            )
+            # Bulletproof fallback — always mark as failed even if DB is down
+            try:
+                await _update_doc_fields(
+                    doc_id, session,
+                    status=DocumentStatus.failed,
+                    error_message=str(exc)[:500],
+                )
+            except Exception as update_exc:
+                logger.error(f"Could not update failed status for {doc_id}: {update_exc}")
+                # Last resort: update in-memory store directly
+                if doc_id in _documents_store:
+                    _documents_store[doc_id].status = DocumentStatus.failed
+                    _documents_store[doc_id].error_message = str(exc)[:500]
 
     if session_ctx is not None:
         async with session_ctx as session:
