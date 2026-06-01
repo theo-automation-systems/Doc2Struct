@@ -1,5 +1,6 @@
 """
 SQLAlchemy ORM models — Document and Extraction tables.
+No ORM relationships — queries are done explicitly in routes.
 """
 
 from __future__ import annotations
@@ -7,14 +8,20 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional, Any
 
-from sqlalchemy import (
-    String, Integer, Float, DateTime, Text, Enum as SAEnum, ForeignKey, func
-)
+from sqlalchemy import String, Integer, Float, DateTime, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 from app.models.document import DocumentType, DocumentStatus
+
+
+def _as_enum(value, enum_cls):
+    if isinstance(value, enum_cls):
+        return value
+    if hasattr(value, "value"):
+        return enum_cls(value.value)
+    return enum_cls(value)
 
 
 class DocumentORM(Base):
@@ -22,18 +29,9 @@ class DocumentORM(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     name: Mapped[str] = mapped_column(String(512), nullable=False)
-    type: Mapped[str] = mapped_column(
-        SAEnum(DocumentType, name="document_type", create_constraint=True),
-        default=DocumentType.unknown,
-        server_default="unknown",
-        nullable=False,
-    )
-    status: Mapped[str] = mapped_column(
-        SAEnum(DocumentStatus, name="document_status", create_constraint=True),
-        default=DocumentStatus.pending,
-        server_default="pending",
-        nullable=False,
-    )
+    # Plain strings — avoids asyncpg / PostgreSQL native ENUM issues on Neon
+    type: Mapped[str] = mapped_column(String(32), default="unknown", server_default="unknown", nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending", server_default="pending", nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False)
     pages: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(
@@ -47,19 +45,13 @@ class DocumentORM(Base):
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    extraction: Mapped[Optional["ExtractionORM"]] = relationship(
-        back_populates="document",
-        cascade="all, delete-orphan",
-        lazy="noload",
-    )
-
     def to_pydantic(self):
         from app.models.document import DocumentMetadata
         return DocumentMetadata(
             id=self.id,
             name=self.name,
-            type=DocumentType(self.type),
-            status=DocumentStatus(self.status),
+            type=_as_enum(self.type, DocumentType),
+            status=_as_enum(self.status, DocumentStatus),
             size=self.size,
             pages=self.pages,
             uploaded_at=self.uploaded_at,
@@ -74,11 +66,7 @@ class DocumentORM(Base):
 class ExtractionORM(Base):
     __tablename__ = "extractions"
 
-    document_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("documents.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
+    document_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     document_type: Mapped[str] = mapped_column(String(64), nullable=False)
     fields: Mapped[Any] = mapped_column(JSONB, nullable=False, default=list)
     raw_json: Mapped[Any] = mapped_column(JSONB, nullable=False, default=dict)
@@ -88,8 +76,6 @@ class ExtractionORM(Base):
     warnings: Mapped[Any] = mapped_column(JSONB, nullable=False, default=list)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     processing_time_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-
-    document: Mapped["DocumentORM"] = relationship(back_populates="extraction")
 
     def to_dict(self) -> dict:
         return {

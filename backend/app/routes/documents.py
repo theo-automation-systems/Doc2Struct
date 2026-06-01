@@ -92,8 +92,8 @@ async def _save_doc(doc: DocumentMetadata, session: Optional[AsyncSession]) -> N
         row = DocumentORM(
             id=doc.id,
             name=doc.name,
-            type=doc.type,
-            status=doc.status,
+            type=doc.type.value if hasattr(doc.type, "value") else doc.type,
+            status=doc.status.value if hasattr(doc.status, "value") else doc.status,
             size=doc.size,
             pages=doc.pages,
             uploaded_at=doc.uploaded_at,
@@ -144,7 +144,8 @@ async def _save_extraction(doc_id: str, data: dict, session: Optional[AsyncSessi
 
 async def _delete_doc(doc_id: str, session: Optional[AsyncSession]) -> None:
     if session:
-        from ..models.orm import DocumentORM
+        from ..models.orm import DocumentORM, ExtractionORM
+        await session.execute(delete(ExtractionORM).where(ExtractionORM.document_id == doc_id))
         await session.execute(delete(DocumentORM).where(DocumentORM.id == doc_id))
         await session.commit()
     else:
@@ -189,7 +190,7 @@ async def process_document_task(
             extraction = await engine.extract(text, doc_type_str)
 
             extraction_data = {
-                "document_type": doc_type,
+                "document_type": doc_type.value if hasattr(doc_type, "value") else doc_type,
                 "fields": [f if isinstance(f, dict) else f.model_dump() for f in extraction["fields"]],
                 "raw_json": extraction["raw_json"],
                 "summary": extraction["summary"],
