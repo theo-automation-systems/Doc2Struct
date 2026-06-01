@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional, Any
 
 from sqlalchemy import (
-    String, Integer, Float, DateTime, Text, Enum as SAEnum, func
+    String, Integer, Float, DateTime, Text, Enum as SAEnum, ForeignKey, func
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -76,6 +76,7 @@ class ExtractionORM(Base):
 
     document_id: Mapped[str] = mapped_column(
         String(36),
+        ForeignKey("documents.id", ondelete="CASCADE"),
         primary_key=True,
     )
     document_type: Mapped[str] = mapped_column(String(64), nullable=False)

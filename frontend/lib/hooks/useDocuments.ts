@@ -67,7 +67,7 @@ export function useDocuments(): UseDocumentsReturn {
         .filter(d => d.status === "completed")
         .forEach(d => loadExtraction(d.id));
     } catch {
-      // Backend unreachable — keep mock data
+      setBackendOnline(false);
     }
   }, []);
 
@@ -89,7 +89,22 @@ export function useDocuments(): UseDocumentsReturn {
   const startPolling = useCallback((docId: string) => {
     if (pollingRefs.current[docId]) return; // already polling
 
+    const MAX_POLLS = 90; // 3 minutes max (90 × 2s)
+    let pollCount = 0;
+
     const interval = setInterval(async () => {
+      pollCount++;
+
+      // Timeout — stop polling and mark as failed
+      if (pollCount > MAX_POLLS) {
+        clearInterval(pollingRefs.current[docId]);
+        delete pollingRefs.current[docId];
+        setDocuments(prev => prev.map(d =>
+          d.id === docId ? { ...d, status: "failed" as const } : d
+        ));
+        return;
+      }
+
       try {
         const doc = await getDocument(docId);
         const frontendDoc = toFrontendDocument(doc);

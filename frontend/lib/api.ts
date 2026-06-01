@@ -54,8 +54,11 @@ export interface APIStats {
 
 export async function checkBackendHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(3000) });
-    return res.ok;
+    const health = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(3000) });
+    if (!health.ok) return false;
+    // Also verify the documents API works (health alone is not enough)
+    const docs = await fetch(`${BASE}/api/v1/documents/?limit=1`, { signal: AbortSignal.timeout(5000) });
+    return docs.ok;
   } catch {
     return false;
   }
