@@ -69,7 +69,8 @@ GET    /api/v1/stats                     Platform statistics
 ## Environment Variables
 
 ```env
-OPENAI_API_KEY=sk-...
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=llama-3.3-70b-versatile
 DATABASE_URL=postgresql://...     # Optional, defaults to in-memory
 NOTION_API_KEY=secret_...         # Optional, for Notion export
 ```

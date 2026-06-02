@@ -6,7 +6,7 @@ import {
   FileText, User, Scale, FileBarChart,
   Sparkles, ChevronLeft, ChevronRight,
   Loader2, CheckCircle2, Eye, Maximize2,
-  ScanLine, Brain,
+  ScanLine, Brain, AlertCircle, Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Document } from "@/lib/types";
@@ -260,7 +260,55 @@ export function DocumentPreview({ document, isAnalyzing = false }: DocumentPrevi
 
       {/* Document content */}
       <div className="flex-1 overflow-y-auto p-6 relative bg-background">
-        {/* AI Processing overlay */}
+        {/* Failed overlay */}
+        <AnimatePresence>
+          {document.status === "failed" && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm gap-3 px-8"
+            >
+              <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                <AlertCircle className="w-5 h-5 text-red-500" />
+              </div>
+              <div className="text-center max-w-sm">
+                <p className="text-sm font-semibold text-foreground">Extraction echouee</p>
+                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                  {document.errorMessage?.includes("insufficient_quota") || document.errorMessage?.includes("429")
+                    ? "Quota API depasse. Verifie ta cle Groq sur console.groq.com ou entre une autre cle dans Settings."
+                    : document.errorMessage?.slice(0, 200) ?? "Une erreur est survenue lors de l'analyse."}
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Pending / demo — not yet analyzed */}
+        <AnimatePresence>
+          {!isAnalyzing && document.status === "pending" && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/85 backdrop-blur-sm gap-3 px-8"
+            >
+              <div className="w-12 h-12 rounded-full bg-muted border border-border flex items-center justify-center">
+                <Upload className="w-5 h-5 text-muted-foreground" />
+              </div>
+              <div className="text-center max-w-xs">
+                <p className="text-sm font-semibold text-foreground">Pas encore analyse</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {document.id.startsWith("demo_")
+                    ? "Document de demonstration. Uploade un vrai fichier pour lancer l'extraction IA."
+                    : "En attente de traitement. L'analyse demarrera automatiquement."}
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* AI Processing overlay — only while actively processing */}
         <AnimatePresence>
           {isAnalyzing && (
             <motion.div

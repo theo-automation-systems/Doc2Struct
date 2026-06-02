@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
 import { Search, Bell, Sun, Moon, PanelRightOpen, PanelRightClose, Menu } from "lucide-react";
@@ -17,8 +17,11 @@ interface HeaderProps {
 
 export function Header({ title, subtitle, aiPanelOpen, onToggleAIPanel, onToggleSidebar }: HeaderProps) {
   const [searchFocused, setSearchFocused] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { theme, setTheme } = useTheme();
   const isDark = theme === "dark";
+
+  useEffect(() => setMounted(true), []);
 
   return (
     <header className="h-14 flex items-center gap-4 px-6 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-10 shrink-0">
@@ -78,18 +81,18 @@ export function Header({ title, subtitle, aiPanelOpen, onToggleAIPanel, onToggle
 
         {/* Theme toggle */}
         <button
-          onClick={() => setTheme(isDark ? "light" : "dark")}
+          onClick={() => mounted && setTheme(isDark ? "light" : "dark")}
           className="relative h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground overflow-hidden"
-          title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          suppressHydrationWarning
         >
           <motion.div
-            key={isDark ? "moon" : "sun"}
+            key={mounted ? (isDark ? "moon" : "sun") : "sun"}
             initial={{ y: -12, opacity: 0, rotate: -20 }}
             animate={{ y: 0, opacity: 1, rotate: 0 }}
             exit={{ y: 12, opacity: 0 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
           >
-            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {mounted ? (isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />) : <Sun className="w-4 h-4 opacity-0" />}
           </motion.div>
         </button>
 

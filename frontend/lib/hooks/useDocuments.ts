@@ -16,7 +16,7 @@ interface UseDocumentsReturn {
   extractions: Record<string, ExtractionResult>;
   loading: boolean;
   backendOnline: boolean;
-  upload: (file: File) => Promise<string | null>;
+  upload: (file: File) => Promise<Document | null>;
   remove: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -30,9 +30,9 @@ export function useDocuments(): UseDocumentsReturn {
   // Polling refs — track which docs are still processing
   const pollingRefs = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
-  const openaiKey = (): string | undefined => {
+  const groqKey = (): string | undefined => {
     if (typeof window === "undefined") return undefined;
-    return localStorage.getItem("openai_api_key") ?? undefined;
+    return localStorage.getItem("groq_api_key") ?? undefined;
   };
 
   // ── Health check ────────────────────────────────────────────────────────────
@@ -49,13 +49,8 @@ export function useDocuments(): UseDocumentsReturn {
       const apiDocs = await listDocuments({ limit: 100 });
       const frontendDocs = apiDocs.map(toFrontendDocument);
 
-      // Merge API docs with mock docs (API docs take priority by id)
-      const apiIds = new Set(frontendDocs.map(d => d.id));
-      const merged = [
-        ...frontendDocs,
-        ...mockDocuments.filter(d => !apiIds.has(d.id)),
-      ];
-      setDocuments(merged);
+      // Real API docs replace demo mocks when any exist
+      setDocuments(frontendDocs.length > 0 ? frontendDocs : mockDocuments);
 
       // Start polling for docs still processing
       apiDocs
@@ -138,30 +133,32 @@ export function useDocuments(): UseDocumentsReturn {
   }, []);
 
   // ── Upload ──────────────────────────────────────────────────────────────────
-  const upload = useCallback(async (file: File): Promise<string | null> => {
+  const upload = useCallback(async (file: File): Promise<Document | null> => {
     if (!backendOnline) {
       console.warn("Backend offline — upload simulated");
       return null;
     }
     setLoading(true);
     try {
-      const apiDoc = await uploadDocument(file, openaiKey());
+      const apiDoc = await uploadDocument(file, groqKey());
       const frontendDoc = toFrontendDocument(apiDoc);
 
-      setDocuments(prev => [frontendDoc, ...prev]);
+      setDocuments(prev => [frontendDoc, ...prev.filter(d => !d.id.startsWith("demo_"))]);
 
       if (apiDoc.status === "processing" || apiDoc.status === "pending") {
         startPolling(apiDoc.id);
+      } else if (apiDoc.status === "completed") {
+        await loadExtraction(apiDoc.id);
       }
 
-      return apiDoc.id;
+      return frontendDoc;
     } catch (err) {
       console.error("Upload failed:", err);
       return null;
     } finally {
       setLoading(false);
     }
-  }, [backendOnline, startPolling]);
+  }, [backendOnline, startPolling, loadExtraction]);
 
   // ── Delete ──────────────────────────────────────────────────────────────────
   const remove = useCallback(async (id: string) => {

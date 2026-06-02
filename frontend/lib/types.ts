@@ -14,6 +14,7 @@ export interface Document {
   confidence?: number;
   extractedFields?: number;
   summary?: string;
+  errorMessage?: string;
 }
 
 export interface ExtractionField {

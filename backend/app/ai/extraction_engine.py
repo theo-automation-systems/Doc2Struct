@@ -1,17 +1,21 @@
 """
-AI Extraction Engine — uses OpenAI structured outputs to extract data from documents.
+AI Extraction Engine — uses Groq (OpenAI-compatible API) for classification and extraction.
 Supports invoice, resume, contract, and report extraction schemas.
 """
 
 import json
+import os
 import time
 import logging
+import re
 from typing import Any
 
 from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
 
 EXTRACTION_SCHEMAS = {
     "invoice": {
@@ -107,26 +111,65 @@ Include a confidence score (0-100) for each field based on how clearly it appear
 Format: {"field_name": {"value": <value>, "confidence": <0-100>}, ...}"""
 
 
+def _parse_json_content(content: str) -> dict:
+    """Parse JSON from model output, tolerating markdown fences."""
+    text = content.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    return json.loads(text)
+
+
 class ExtractionEngine:
 
-    def __init__(self, api_key: str | None = None, model: str = "gpt-4o-mini"):
-        self.client = AsyncOpenAI(api_key=api_key)
-        self.model = model
+    def __init__(self, api_key: str | None = None, model: str | None = None):
+        key = api_key or os.environ.get("GROQ_API_KEY")
+        if not key:
+            raise ValueError("GROQ_API_KEY is not configured")
+        self.client = AsyncOpenAI(api_key=key, base_url=GROQ_BASE_URL)
+        self.model = model or os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL)
+
+    async def _chat(
+        self,
+        messages: list[dict],
+        *,
+        max_tokens: int = 1024,
+        temperature: float = 0.1,
+        json_mode: bool = False,
+    ) -> str:
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        try:
+            response = await self.client.chat.completions.create(**kwargs)
+        except Exception:
+            if json_mode:
+                kwargs.pop("response_format", None)
+                response = await self.client.chat.completions.create(**kwargs)
+            else:
+                raise
+        return response.choices[0].message.content or ""
 
     async def classify_document(self, text: str) -> str:
         """Classify document type using AI."""
         try:
             truncated = text[:1500]
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "user", "content": CLASSIFICATION_PROMPT.format(text=truncated)}
-                ],
+            content = await self._chat(
+                [{"role": "user", "content": CLASSIFICATION_PROMPT.format(text=truncated)}],
                 max_tokens=20,
                 temperature=0,
             )
-            doc_type = response.choices[0].message.content.strip().lower()
-            return doc_type if doc_type in EXTRACTION_SCHEMAS else "unknown"
+            doc_type = content.strip().lower()
+            # Groq may return extra text — extract known type
+            for t in [*EXTRACTION_SCHEMAS.keys(), "unknown"]:
+                if t in doc_type:
+                    return t
+            return "unknown"
         except Exception as e:
             logger.error(f"Classification failed: {e}")
             return "unknown"
@@ -135,10 +178,7 @@ class ExtractionEngine:
         """Extract structured data from document text."""
         start_time = time.time()
 
-        schema = EXTRACTION_SCHEMAS.get(doc_type)
-        if not schema:
-            schema = EXTRACTION_SCHEMAS["report"]
-
+        schema = EXTRACTION_SCHEMAS.get(doc_type) or EXTRACTION_SCHEMAS["report"]
         schema_str = json.dumps(schema["fields"], indent=2)
         prompt = f"""Extract structured data from this {doc_type} document.
 
@@ -150,58 +190,49 @@ Document text:
 
 Return JSON with confidence scores for each field."""
 
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": EXTRACTION_SYSTEM},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.1,
-            )
+        content = await self._chat(
+            [
+                {"role": "system", "content": EXTRACTION_SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=4096,
+            temperature=0.1,
+            json_mode=True,
+        )
 
-            raw_json = json.loads(response.choices[0].message.content)
-            fields = self._parse_fields(raw_json)
-            confidence = sum(f["confidence"] for f in fields) / len(fields) if fields else 0
+        raw_json = _parse_json_content(content)
+        fields = self._parse_fields(raw_json)
+        confidence = sum(f["confidence"] for f in fields) / len(fields) if fields else 0
+        processing_time = int((time.time() - start_time) * 1000)
 
-            processing_time = int((time.time() - start_time) * 1000)
+        summary = await self._generate_summary(text, doc_type, raw_json)
+        insights = await self._generate_insights(doc_type, raw_json)
 
-            summary = await self._generate_summary(text, doc_type, raw_json)
-            insights = await self._generate_insights(doc_type, raw_json)
-
-            return {
-                "fields": fields,
-                "raw_json": raw_json,
-                "summary": summary,
-                "key_insights": insights.get("key_insights", []),
-                "action_items": insights.get("action_items", []),
-                "warnings": insights.get("warnings", []),
-                "confidence": round(confidence, 1),
-                "processing_time_ms": processing_time,
-            }
-        except Exception as e:
-            logger.exception(f"Extraction failed: {e}")
-            raise
+        return {
+            "fields": fields,
+            "raw_json": raw_json,
+            "summary": summary,
+            "key_insights": insights.get("key_insights", []),
+            "action_items": insights.get("action_items", []),
+            "warnings": insights.get("warnings", []),
+            "confidence": round(confidence, 1),
+            "processing_time_ms": processing_time,
+        }
 
     async def _generate_summary(self, text: str, doc_type: str, extracted: dict) -> str:
-        """Generate a concise AI summary of the document."""
         prompt = f"""Write a 2-3 sentence professional summary of this {doc_type} document.
 Be concise and factual. Include key figures/names.
 
 Extracted data: {json.dumps(extracted)[:1000]}
 Document snippet: {text[:500]}"""
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
+        return (await self._chat(
+            [{"role": "user", "content": prompt}],
             max_tokens=200,
             temperature=0.3,
-        )
-        return response.choices[0].message.content.strip()
+        )).strip()
 
     async def _generate_insights(self, doc_type: str, extracted: dict) -> dict:
-        """Generate insights, action items, and warnings."""
         prompt = f"""Based on this extracted {doc_type} data, provide:
 1. 3-4 key insights
 2. 2-3 recommended action items
@@ -211,17 +242,15 @@ Data: {json.dumps(extracted)[:1500]}
 
 Respond as JSON: {{"key_insights": [...], "action_items": [...], "warnings": [...]}}"""
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
+        content = await self._chat(
+            [{"role": "user", "content": prompt}],
             max_tokens=400,
             temperature=0.3,
+            json_mode=True,
         )
-        return json.loads(response.choices[0].message.content)
+        return _parse_json_content(content)
 
     def _parse_fields(self, raw_json: dict) -> list[dict]:
-        """Parse extracted JSON into field list with confidence scores."""
         fields = []
         for key, data in raw_json.items():
             if isinstance(data, dict) and "value" in data:

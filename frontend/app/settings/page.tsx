@@ -62,14 +62,14 @@ export default function SettingsPage() {
   });
 
   // API Keys stored in localStorage
-  const [openaiKey, setOpenaiKey] = useState(() =>
-    typeof window !== "undefined" ? localStorage.getItem("openai_api_key") ?? "" : ""
+  const [groqKey, setGroqKey] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("groq_api_key") ?? "" : ""
   );
   const [keyVisible, setKeyVisible] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
 
-  const saveOpenaiKey = () => {
-    localStorage.setItem("openai_api_key", openaiKey);
+  const saveGroqKey = () => {
+    localStorage.setItem("groq_api_key", groqKey);
     setKeySaved(true);
     setTimeout(() => setKeySaved(false), 2000);
   };
@@ -263,18 +263,18 @@ export default function SettingsPage() {
                 <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
                   <div className="flex items-center gap-2 mb-1">
                     <Sparkles className="w-4 h-4 text-primary" />
-                    <h3 className="text-sm font-semibold">OpenAI API Key</h3>
+                    <h3 className="text-sm font-semibold">Groq API Key</h3>
                   </div>
                   <p className="text-xs text-muted-foreground mb-4">
-                    Votre clé est stockée localement dans votre navigateur et envoyée directement au backend lors des extractions. Elle n&apos;est jamais sauvegardée côté serveur.
+                    Cle Groq pour Llama 3.3 — stockee localement et envoyee au backend a chaque upload. Modele : llama-3.3-70b-versatile.
                   </p>
                   <div className="flex gap-2">
                     <div className="flex-1 relative">
                       <input
                         type={keyVisible ? "text" : "password"}
-                        value={openaiKey}
-                        onChange={(e) => setOpenaiKey(e.target.value)}
-                        placeholder="sk-..."
+                        value={groqKey}
+                        onChange={(e) => setGroqKey(e.target.value)}
+                        placeholder="gsk_..."
                         className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:bg-background transition-colors pr-9"
                       />
                       <button
@@ -285,18 +285,18 @@ export default function SettingsPage() {
                         {keyVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
                     </div>
-                    <Button onClick={saveOpenaiKey} size="sm" className="h-9 px-4 text-xs shrink-0 gap-1.5">
+                    <Button onClick={saveGroqKey} size="sm" className="h-9 px-4 text-xs shrink-0 gap-1.5">
                       {keySaved ? <><Check className="w-3 h-3" /> Saved</> : "Save Key"}
                     </Button>
                   </div>
-                  {openaiKey && (
+                  {groqKey && (
                     <p className="mt-2 text-[11px] text-emerald-600 flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Clé configurée — les extractions utiliseront l&apos;IA réelle
+                      <Check className="w-3 h-3" /> Cle configuree — extractions via Groq
                     </p>
                   )}
-                  {!openaiKey && (
+                  {!groqKey && (
                     <p className="mt-2 text-[11px] text-amber-600 flex items-center gap-1">
-                      ⚠ Aucune clé — le backend utilisera la variable d&apos;environnement <code className="bg-muted px-1 rounded">OPENAI_API_KEY</code>
+                      Aucune cle locale — le backend utilisera <code className="bg-muted px-1 rounded">GROQ_API_KEY</code> (Railway)
                     </p>
                   )}
                 </div>

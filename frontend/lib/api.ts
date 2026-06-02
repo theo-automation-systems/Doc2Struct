@@ -68,13 +68,13 @@ export async function checkBackendHealth(): Promise<boolean> {
 
 export async function uploadDocument(
   file: File,
-  openaiApiKey?: string
+  groqApiKey?: string
 ): Promise<APIDocument> {
   const form = new FormData();
   form.append("file", file);
 
   const url = new URL(`${BASE}/api/v1/documents/upload`);
-  if (openaiApiKey) url.searchParams.set("openai_api_key", openaiApiKey);
+  if (groqApiKey) url.searchParams.set("groq_api_key", groqApiKey);
 
   const res = await fetch(url.toString(), { method: "POST", body: form });
   if (!res.ok) {
@@ -157,6 +157,7 @@ export function toFrontendDocument(d: APIDocument) {
     confidence: d.confidence,
     extractedFields: d.extracted_fields,
     summary: d.summary,
+    errorMessage: d.error_message,
   };
 }
 

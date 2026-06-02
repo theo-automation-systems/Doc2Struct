@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { DocumentPreview } from "@/components/documents/DocumentPreview";
@@ -89,12 +89,12 @@ function DocListItem({
           "text-xs font-semibold leading-tight truncate",
           selected ? "text-foreground" : "text-foreground/80"
         )}>
-          {doc.name.replace(/\.[^.]+$/, "")}
+          {doc.name.split(".").slice(0, -1).join(".") || doc.name}
         </p>
         <div className="flex items-center gap-1.5 mt-1">
           <StatusIcon className={cn("w-2.5 h-2.5 shrink-0", statusConf.color)} />
           <span className="text-[10px] text-muted-foreground capitalize">{doc.status}</span>
-          <span className="text-muted-foreground/30">·</span>
+          <span className="text-muted-foreground/30">-</span>
           <span className="text-[10px] text-muted-foreground">{formatDate(doc.uploadedAt)}</span>
         </div>
         {doc.status === "completed" && doc.confidence && (
@@ -147,9 +147,16 @@ export default function DocumentsPage() {
   const [activeTab, setActiveTab] = useState<"preview" | "extraction">("preview");
 
   // Select first doc once list loads
-  useState(() => {
+  useEffect(() => {
     if (!selectedDoc && documents.length > 0) setSelectedDoc(documents[0]);
-  });
+  }, [documents, selectedDoc]);
+
+  // Keep selected doc in sync with polling updates (status, error, etc.)
+  useEffect(() => {
+    if (!selectedDoc) return;
+    const updated = documents.find(d => d.id === selectedDoc.id);
+    if (updated && updated !== selectedDoc) setSelectedDoc(updated);
+  }, [documents, selectedDoc]);
 
   const filtered = documents.filter((doc) => {
     const matchType = typeFilter === "all" || doc.type === typeFilter;
@@ -158,14 +165,13 @@ export default function DocumentsPage() {
   });
 
   const extraction = selectedDoc ? extractions[selectedDoc.id] ?? null : null;
-  const isAnalyzing = selectedDoc?.status === "processing" || selectedDoc?.status === "pending";
+  const isAnalyzing = selectedDoc?.status === "processing";
+  const completedCount = documents.filter(d => d.status === "completed").length;
+  const pageSubtitle = `${documents.length} documents - ${completedCount} processed`;
 
   const handleUpload = async (file: File) => {
-    const newId = await upload(file);
-    if (newId) {
-      const newDoc = documents.find(d => d.id === newId);
-      if (newDoc) setSelectedDoc(newDoc);
-    }
+    const newDoc = await upload(file);
+    if (newDoc) setSelectedDoc(newDoc);
     setShowUpload(false);
   };
 
@@ -177,7 +183,7 @@ export default function DocumentsPage() {
   return (
     <MainLayout
       title="Documents"
-      subtitle={`${documents.length} documents · ${documents.filter(d => d.status === "completed").length} processed`}
+      subtitle={pageSubtitle}
       documentName={selectedDoc?.name}
     >
       {/* Backend status bar */}
@@ -187,8 +193,8 @@ export default function DocumentsPage() {
       )}>
         <div className="flex items-center gap-1.5">
           {backendOnline
-            ? <><Wifi className="w-3 h-3" /> Backend connecté — extractions IA actives</>
-            : <><WifiOff className="w-3 h-3" /> Backend hors ligne — données de démonstration</>
+            ? <span className="flex items-center gap-1.5"><Wifi className="w-3 h-3" /> Backend connecte - extractions IA actives</span>
+            : <span className="flex items-center gap-1.5"><WifiOff className="w-3 h-3" /> Backend hors ligne - donnees de demonstration</span>
           }
         </div>
         <button onClick={refresh} className="flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
@@ -396,7 +402,7 @@ export default function DocumentsPage() {
               {/* Panel header */}
               <div className="px-4 py-3 border-b border-border shrink-0">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                  {selectedDoc.name.replace(/\.[^.]+$/, "").slice(0, 28)}
+                  {selectedDoc.name.split(".").slice(0, -1).join(".").slice(0, 28) || selectedDoc.name.slice(0, 28)}
                 </p>
               </div>
               <AIFindingsPanel
@@ -406,8 +412,6 @@ export default function DocumentsPage() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        </div>
 
       </div>
     </MainLayout>

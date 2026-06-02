@@ -135,7 +135,7 @@ async def process_document_task(
             pages = parsed["pages"]
             await _update_doc_fields(doc_id, session, pages=pages)
 
-            effective_key = api_key or os.environ.get("OPENAI_API_KEY")
+            effective_key = api_key or os.environ.get("GROQ_API_KEY")
             engine = ExtractionEngine(api_key=effective_key)
 
             doc_type_str = await engine.classify_document(text)
@@ -195,7 +195,7 @@ async def process_document_task(
 async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    openai_api_key: Optional[str] = Query(None, description="OpenAI API key"),
+    groq_api_key: Optional[str] = Query(None, description="Groq API key for processing"),
 ):
     """Upload a document and start async AI processing."""
     allowed_extensions = {".pdf", ".txt", ".docx", ".xlsx", ".doc", ".xls"}
@@ -226,7 +226,7 @@ async def upload_document(
         doc_id,
         file_bytes,
         file.filename or "document",
-        openai_api_key,
+        groq_api_key,
     )
     return doc
 
