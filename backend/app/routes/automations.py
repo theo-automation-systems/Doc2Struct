@@ -27,7 +27,7 @@ TEMPLATES: dict[str, AutomationTemplate] = {
         name="Invoice Processing",
         description="Automatically extract vendor details, amounts, dates, and line items.",
         category="Finance",
-        schema={
+        extraction_schema={
             "invoice_number": "string",
             "vendor_name": "string",
             "total_amount": "currency",
@@ -41,7 +41,7 @@ TEMPLATES: dict[str, AutomationTemplate] = {
         name="Resume Screening",
         description="Parse CVs to extract skills, experience, and education.",
         category="HR",
-        schema={
+        extraction_schema={
             "full_name": "string",
             "email": "email",
             "years_experience": "number",
@@ -55,7 +55,7 @@ TEMPLATES: dict[str, AutomationTemplate] = {
         name="Contract Analyzer",
         description="Extract key contract clauses, parties, and risk flags.",
         category="Legal",
-        schema={
+        extraction_schema={
             "parties": "array",
             "effective_date": "date",
             "total_value": "currency",
@@ -69,7 +69,7 @@ TEMPLATES: dict[str, AutomationTemplate] = {
         name="Financial Report Parser",
         description="Extract KPIs and trends from financial reports.",
         category="Finance",
-        schema={
+        extraction_schema={
             "revenue": "currency",
             "net_profit": "currency",
             "growth_rate": "number",
