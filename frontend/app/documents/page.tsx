@@ -139,7 +139,7 @@ function DocListItem({
 }
 
 export default function DocumentsPage() {
-  const { documents, extractions, loading, backendOnline, upload, remove, refresh } = useDocuments();
+  const { documents, extractions, loading, backendOnline, backendChecking, upload, remove, refresh } = useDocuments();
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [typeFilter, setTypeFilter] = useState<DocumentType | "all">("all");
   const [search, setSearch] = useState("");
@@ -189,10 +189,13 @@ export default function DocumentsPage() {
       {/* Backend status bar */}
       <div className={cn(
         "flex items-center justify-between px-4 py-1.5 text-[11px] border-b border-border shrink-0 transition-colors",
-        backendOnline ? "bg-emerald-500/5 text-emerald-600" : "bg-amber-500/5 text-amber-600"
+        backendChecking ? "bg-muted/50 text-muted-foreground"
+          : backendOnline ? "bg-emerald-500/5 text-emerald-600" : "bg-amber-500/5 text-amber-600"
       )}>
         <div className="flex items-center gap-1.5">
-          {backendOnline
+          {backendChecking
+            ? <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Connexion au backend Railway...</span>
+            : backendOnline
             ? <span className="flex items-center gap-1.5"><Wifi className="w-3 h-3" /> Backend connecte - extractions IA actives</span>
             : <span className="flex items-center gap-1.5"><WifiOff className="w-3 h-3" /> Backend hors ligne - donnees de demonstration</span>
           }

@@ -6,6 +6,17 @@
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/** Railway cold starts can exceed 10s — keep timeouts generous */
+const TIMEOUT = {
+  health: 30_000,
+  read: 25_000,
+  upload: 120_000,
+} as const;
+
+function fetchWithTimeout(url: string, init: RequestInit = {}, ms = TIMEOUT.read) {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
+}
+
 // ── Types matching backend Pydantic models ────────────────────────────────────
 
 export interface APIDocument {
@@ -53,15 +64,16 @@ export interface APIStats {
 // ── Health check ──────────────────────────────────────────────────────────────
 
 export async function checkBackendHealth(): Promise<boolean> {
-  try {
-    const health = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(3000) });
-    if (!health.ok) return false;
-    // Also verify the documents API works (health alone is not enough)
-    const docs = await fetch(`${BASE}/api/v1/documents/?limit=1`, { signal: AbortSignal.timeout(5000) });
-    return docs.ok;
-  } catch {
-    return false;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetchWithTimeout(`${BASE}/health`, {}, TIMEOUT.health);
+      if (res.ok) return true;
+    } catch {
+      // Railway cold start — retry once after a short pause
+      if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
+    }
   }
+  return false;
 }
 
 // ── Documents ─────────────────────────────────────────────────────────────────
@@ -76,7 +88,7 @@ export async function uploadDocument(
   const url = new URL(`${BASE}/api/v1/documents/upload`);
   if (groqApiKey) url.searchParams.set("groq_api_key", groqApiKey);
 
-  const res = await fetch(url.toString(), { method: "POST", body: form });
+  const res = await fetchWithTimeout(url.toString(), { method: "POST", body: form }, TIMEOUT.upload);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Upload failed" }));
     throw new Error(err.detail ?? "Upload failed");
@@ -94,23 +106,19 @@ export async function listDocuments(params?: {
   if (params?.status) url.searchParams.set("status", params.status);
   if (params?.limit) url.searchParams.set("limit", String(params.limit));
 
-  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(5000) });
+  const res = await fetchWithTimeout(url.toString());
   if (!res.ok) throw new Error("Failed to fetch documents");
   return res.json();
 }
 
 export async function getDocument(id: string): Promise<APIDocument> {
-  const res = await fetch(`${BASE}/api/v1/documents/${id}`, {
-    signal: AbortSignal.timeout(5000),
-  });
+  const res = await fetchWithTimeout(`${BASE}/api/v1/documents/${id}`);
   if (!res.ok) throw new Error("Document not found");
   return res.json();
 }
 
 export async function getExtraction(id: string): Promise<APIExtractionResult> {
-  const res = await fetch(`${BASE}/api/v1/documents/${id}/extraction`, {
-    signal: AbortSignal.timeout(5000),
-  });
+  const res = await fetchWithTimeout(`${BASE}/api/v1/documents/${id}/extraction`);
   if (res.status === 202) throw new Error("PROCESSING"); // still running
   if (!res.ok) throw new Error("Extraction not available");
   return res.json();
@@ -134,9 +142,7 @@ export async function exportDocument(
 }
 
 export async function getStats(): Promise<APIStats> {
-  const res = await fetch(`${BASE}/api/v1/stats`, {
-    signal: AbortSignal.timeout(3000),
-  });
+  const res = await fetchWithTimeout(`${BASE}/api/v1/stats`, {}, TIMEOUT.health);
   if (!res.ok) throw new Error("Stats unavailable");
   return res.json();
 }

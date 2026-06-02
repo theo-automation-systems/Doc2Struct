@@ -16,6 +16,7 @@ interface UseDocumentsReturn {
   extractions: Record<string, ExtractionResult>;
   loading: boolean;
   backendOnline: boolean;
+  backendChecking: boolean;
   upload: (file: File) => Promise<Document | null>;
   remove: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -26,6 +27,7 @@ export function useDocuments(): UseDocumentsReturn {
   const [extractions, setExtractions] = useState<Record<string, ExtractionResult>>(mockExtractionResults);
   const [loading, setLoading] = useState(false);
   const [backendOnline, setBackendOnline] = useState(false);
+  const [backendChecking, setBackendChecking] = useState(true);
 
   // Polling refs — track which docs are still processing
   const pollingRefs = useRef<Record<string, ReturnType<typeof setInterval>>>({});
@@ -39,6 +41,7 @@ export function useDocuments(): UseDocumentsReturn {
   useEffect(() => {
     checkBackendHealth().then(online => {
       setBackendOnline(online);
+      setBackendChecking(false);
       if (online) loadDocuments();
     });
   }, []);
@@ -176,10 +179,12 @@ export function useDocuments(): UseDocumentsReturn {
 
   // ── Refresh ─────────────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {
+    setBackendChecking(true);
     const online = await checkBackendHealth();
     setBackendOnline(online);
+    setBackendChecking(false);
     if (online) await loadDocuments();
   }, [loadDocuments]);
 
-  return { documents, extractions, loading, backendOnline, upload, remove, refresh };
+  return { documents, extractions, loading, backendOnline, backendChecking, upload, remove, refresh };
 }
