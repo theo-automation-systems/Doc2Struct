@@ -10,21 +10,20 @@ import logging
 from typing import Optional
 from datetime import datetime
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Query, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Query
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
 
 from ..models.document import (
     DocumentMetadata,
     DocumentType,
     DocumentStatus,
-    ExtractionResult,
     ExportRequest,
 )
 from ..processing.document_parser import DocumentParser
 from ..ai.extraction_engine import ExtractionEngine
 from ..exports.export_service import ExportService
+from ..db import document_repo as repo
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 logger = logging.getLogger(__name__)
@@ -37,12 +36,6 @@ export_service = ExportService()
 def _db_available() -> bool:
     return bool(os.environ.get("DATABASE_URL"))
 
-def _get_session_dep():
-    """Return the get_session dependency only when DB is available."""
-    if _db_available():
-        from ..database import get_session
-        return get_session
-    return None
 
 # ── In-memory fallback (no DATABASE_URL) ─────────────────────────────────────
 
@@ -54,9 +47,7 @@ _extractions_store: dict[str, dict] = {}
 
 async def _get_doc(doc_id: str, session: Optional[AsyncSession]) -> Optional[DocumentMetadata]:
     if session:
-        from ..models.orm import DocumentORM
-        row = await session.get(DocumentORM, doc_id)
-        return row.to_pydantic() if row else None
+        return await repo.get_document(session, doc_id)
     return _documents_store.get(doc_id)
 
 
@@ -68,15 +59,7 @@ async def _list_docs(
     offset: int,
 ) -> list[DocumentMetadata]:
     if session:
-        from ..models.orm import DocumentORM
-        stmt = select(DocumentORM).order_by(DocumentORM.uploaded_at.desc())
-        if doc_type:
-            stmt = stmt.where(DocumentORM.type == doc_type)
-        if status:
-            stmt = stmt.where(DocumentORM.status == status)
-        stmt = stmt.offset(offset).limit(limit)
-        result = await session.execute(stmt)
-        return [row.to_pydantic() for row in result.scalars()]
+        return await repo.list_documents(session, doc_type, status, limit, offset)
     docs = list(_documents_store.values())
     if doc_type:
         docs = [d for d in docs if d.type == doc_type]
@@ -88,66 +71,37 @@ async def _list_docs(
 
 async def _save_doc(doc: DocumentMetadata, session: Optional[AsyncSession]) -> None:
     if session:
-        from ..models.orm import DocumentORM
-        row = DocumentORM(
-            id=doc.id,
-            name=doc.name,
-            type=doc.type.value if hasattr(doc.type, "value") else doc.type,
-            status=doc.status.value if hasattr(doc.status, "value") else doc.status,
-            size=doc.size,
-            pages=doc.pages,
-            uploaded_at=doc.uploaded_at,
-            processed_at=doc.processed_at,
-            confidence=doc.confidence,
-            extracted_fields=doc.extracted_fields,
-            summary=doc.summary,
-            error_message=doc.error_message,
-        )
-        await session.merge(row)
-        await session.commit()
+        await repo.insert_document(session, doc)
     else:
         _documents_store[doc.id] = doc
 
 
 async def _update_doc_fields(doc_id: str, session: Optional[AsyncSession], **fields) -> None:
-    # Serialise enum values to their string primitives for asyncpg compatibility
-    clean = {k: (v.value if hasattr(v, "value") else v) for k, v in fields.items()}
     if session:
-        from ..models.orm import DocumentORM
-        await session.execute(
-            update(DocumentORM).where(DocumentORM.id == doc_id).values(**clean)
-        )
-        await session.commit()
+        await repo.update_document(session, doc_id, **fields)
     else:
         if doc_id in _documents_store:
-            for k, v in clean.items():
-                setattr(_documents_store[doc_id], k, v)
+            for k, v in fields.items():
+                val = v.value if hasattr(v, "value") else v
+                setattr(_documents_store[doc_id], k, val)
 
 
 async def _get_extraction(doc_id: str, session: Optional[AsyncSession]) -> Optional[dict]:
     if session:
-        from ..models.orm import ExtractionORM
-        row = await session.get(ExtractionORM, doc_id)
-        return row.to_dict() if row else None
+        return await repo.get_extraction(session, doc_id)
     return _extractions_store.get(doc_id)
 
 
 async def _save_extraction(doc_id: str, data: dict, session: Optional[AsyncSession]) -> None:
     if session:
-        from ..models.orm import ExtractionORM
-        row = ExtractionORM(document_id=doc_id, **data)
-        await session.merge(row)
-        await session.commit()
+        await repo.save_extraction(session, doc_id, data)
     else:
         _extractions_store[doc_id] = data
 
 
 async def _delete_doc(doc_id: str, session: Optional[AsyncSession]) -> None:
     if session:
-        from ..models.orm import DocumentORM, ExtractionORM
-        await session.execute(delete(ExtractionORM).where(ExtractionORM.document_id == doc_id))
-        await session.execute(delete(DocumentORM).where(DocumentORM.id == doc_id))
-        await session.commit()
+        await repo.delete_document(session, doc_id)
     else:
         _documents_store.pop(doc_id, None)
         _extractions_store.pop(doc_id, None)

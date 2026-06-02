@@ -17,7 +17,7 @@ load_dotenv()
 from app.routes.documents import router as documents_router
 from app.routes.automations import router as automations_router
 
-logging.basicConfig(level=logging.INFO)
+BUILD_VERSION = "core-sql-v2"
 logger = logging.getLogger(__name__)
 
 
@@ -74,7 +74,12 @@ app.include_router(automations_router, prefix="/api/v1")
 @app.get("/")
 async def root():
     db_mode = "PostgreSQL (Neon)" if os.environ.get("DATABASE_URL") else "in-memory"
-    return {"message": "Doc2Struct API", "version": "1.0.0", "status": "operational", "storage": db_mode}
+    return {
+        "message": "Doc2Struct API",
+        "version": BUILD_VERSION,
+        "status": "operational",
+        "storage": db_mode,
+    }
 
 
 @app.get("/health")
@@ -90,18 +95,13 @@ async def get_stats():
     if os.environ.get("DATABASE_URL"):
         try:
             from app.database import AsyncSessionLocal
-            from app.models.orm import DocumentORM
-            from sqlalchemy import func, select
+            from app.db import document_repo
 
             async with AsyncSessionLocal() as session:
-                total_r = await session.execute(select(func.count()).select_from(DocumentORM))
-                total = total_r.scalar() or 0
-                completed_r = await session.execute(
-                    select(func.count()).select_from(DocumentORM).where(DocumentORM.status == "completed")
-                )
-                completed = completed_r.scalar() or 0
-        except Exception:
-            pass
+                total = await document_repo.count_documents(session)
+                completed = await document_repo.count_documents(session, status="completed")
+        except Exception as exc:
+            logger.warning(f"Stats DB query failed: {exc}")
     else:
         from app.routes.documents import _documents_store
         total = len(_documents_store)
