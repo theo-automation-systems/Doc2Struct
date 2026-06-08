@@ -276,7 +276,9 @@ export function DocumentPreview({ document, isAnalyzing = false }: DocumentPrevi
                 <p className="text-sm font-semibold text-foreground">Extraction echouee</p>
                 <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
                   {document.errorMessage?.match(/429|quota|rate_limit|rate limit/i)
-                    ? "Limite Groq atteinte (quota ou rate limit). Attends 1 min et reessaie, ou entre une autre cle dans Settings."
+                    ? "Limite Groq atteinte. Supprime ce document, vide la cle dans Settings (si invalide), attends 1 min et re-uploade."
+                    : document.errorMessage?.match(/jsonb|asyncpg|query argument/i)
+                    ? "Erreur base de donnees (ancien upload). Supprime ce document et re-uploade le fichier."
                     : document.errorMessage?.slice(0, 200) ?? "Une erreur est survenue lors de l'analyse."}
                 </p>
               </div>

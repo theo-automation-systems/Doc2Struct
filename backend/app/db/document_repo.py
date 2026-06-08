@@ -141,39 +141,22 @@ async def get_extraction(session: AsyncSession, doc_id: str) -> Optional[dict]:
 
 
 async def save_extraction(session: AsyncSession, doc_id: str, data: dict) -> None:
-    await session.execute(
-        text("""
-            INSERT INTO extractions
-                (document_id, document_type, fields, raw_json, summary,
-                 key_insights, action_items, warnings, confidence, processing_time_ms)
-            VALUES
-                (:document_id, :document_type, CAST(:fields AS jsonb), CAST(:raw_json AS jsonb), :summary,
-                 CAST(:key_insights AS jsonb), CAST(:action_items AS jsonb), CAST(:warnings AS jsonb),
-                 :confidence, :processing_time_ms)
-            ON CONFLICT (document_id) DO UPDATE SET
-                document_type = EXCLUDED.document_type,
-                fields = EXCLUDED.fields,
-                raw_json = EXCLUDED.raw_json,
-                summary = EXCLUDED.summary,
-                key_insights = EXCLUDED.key_insights,
-                action_items = EXCLUDED.action_items,
-                warnings = EXCLUDED.warnings,
-                confidence = EXCLUDED.confidence,
-                processing_time_ms = EXCLUDED.processing_time_ms
-        """),
-        {
-            "document_id": doc_id,
-            "document_type": _enum_val(data.get("document_type", "unknown")),
-            "fields": _jsonb(data.get("fields", [])),
-            "raw_json": _jsonb(data.get("raw_json", {})),
-            "summary": data.get("summary", ""),
-            "key_insights": _jsonb(data.get("key_insights", [])),
-            "action_items": _jsonb(data.get("action_items", [])),
-            "warnings": _jsonb(data.get("warnings", [])),
-            "confidence": data.get("confidence", 0.0),
-            "processing_time_ms": data.get("processing_time_ms", 0),
-        },
+    """Persist extraction via ORM — reliable JSONB binding with asyncpg."""
+    from app.models.orm import ExtractionORM
+
+    row = ExtractionORM(
+        document_id=doc_id,
+        document_type=_enum_val(data.get("document_type", "unknown")),
+        fields=data.get("fields", []),
+        raw_json=data.get("raw_json", {}),
+        summary=data.get("summary", ""),
+        key_insights=data.get("key_insights", []),
+        action_items=data.get("action_items", []),
+        warnings=data.get("warnings", []),
+        confidence=float(data.get("confidence", 0.0)),
+        processing_time_ms=int(data.get("processing_time_ms", 0)),
     )
+    await session.merge(row)
     await session.commit()
 
 

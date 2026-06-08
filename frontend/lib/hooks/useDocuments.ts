@@ -34,7 +34,10 @@ export function useDocuments(): UseDocumentsReturn {
 
   const groqKey = (): string | undefined => {
     if (typeof window === "undefined") return undefined;
-    return localStorage.getItem("groq_api_key") ?? undefined;
+    const key = localStorage.getItem("groq_api_key")?.trim();
+    // Only send client key if valid — otherwise Railway/server GROQ_API_KEY is used
+    if (key?.startsWith("gsk_")) return key;
+    return undefined;
   };
 
   // ── Health check ────────────────────────────────────────────────────────────

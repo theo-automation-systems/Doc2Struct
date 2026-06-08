@@ -37,6 +37,13 @@ def _db_available() -> bool:
     return bool(os.environ.get("DATABASE_URL"))
 
 
+def _resolve_groq_key(client_key: Optional[str]) -> Optional[str]:
+    """Use client key only if it looks like a valid Groq key; else server env."""
+    if client_key and client_key.strip().startswith("gsk_"):
+        return client_key.strip()
+    return os.environ.get("GROQ_API_KEY")
+
+
 # ── In-memory fallback (no DATABASE_URL) ─────────────────────────────────────
 
 _documents_store: dict[str, DocumentMetadata] = {}
@@ -135,7 +142,7 @@ async def process_document_task(
             pages = parsed["pages"]
             await _update_doc_fields(doc_id, session, pages=pages)
 
-            effective_key = api_key or os.environ.get("GROQ_API_KEY")
+            effective_key = _resolve_groq_key(api_key)
             engine = ExtractionEngine(api_key=effective_key)
 
             extraction = await engine.process_document(text)
