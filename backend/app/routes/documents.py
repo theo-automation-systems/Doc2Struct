@@ -138,13 +138,12 @@ async def process_document_task(
             effective_key = api_key or os.environ.get("GROQ_API_KEY")
             engine = ExtractionEngine(api_key=effective_key)
 
-            doc_type_str = await engine.classify_document(text)
+            extraction = await engine.process_document(text)
+            doc_type_str = extraction["document_type"]
             doc_type = DocumentType(doc_type_str)
 
-            extraction = await engine.extract(text, doc_type_str)
-
             extraction_data = {
-                "document_type": doc_type.value if hasattr(doc_type, "value") else doc_type,
+                "document_type": doc_type_str,
                 "fields": [f if isinstance(f, dict) else f.model_dump() for f in extraction["fields"]],
                 "raw_json": extraction["raw_json"],
                 "summary": extraction["summary"],

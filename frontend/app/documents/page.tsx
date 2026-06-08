@@ -155,7 +155,13 @@ export default function DocumentsPage() {
   useEffect(() => {
     if (!selectedDoc) return;
     const updated = documents.find(d => d.id === selectedDoc.id);
-    if (updated && updated !== selectedDoc) setSelectedDoc(updated);
+    if (!updated) return;
+    const changed =
+      updated.status !== selectedDoc.status ||
+      updated.confidence !== selectedDoc.confidence ||
+      updated.errorMessage !== selectedDoc.errorMessage ||
+      updated.summary !== selectedDoc.summary;
+    if (changed) setSelectedDoc(updated);
   }, [documents, selectedDoc]);
 
   const filtered = documents.filter((doc) => {

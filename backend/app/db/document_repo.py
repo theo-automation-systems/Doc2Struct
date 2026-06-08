@@ -5,6 +5,7 @@ Bypasses ORM mappers entirely (avoids relationship / enum mapper crashes).
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any, Optional
 
@@ -21,6 +22,11 @@ _DOC_COLS = (
 
 def _enum_val(v: Any) -> str:
     return v.value if hasattr(v, "value") else str(v)
+
+
+def _jsonb(value: Any) -> str:
+    """asyncpg requires JSON strings for JSONB columns in raw SQL."""
+    return json.dumps(value, ensure_ascii=False, default=str)
 
 
 def _row_to_doc(row: Any) -> DocumentMetadata:
@@ -141,8 +147,9 @@ async def save_extraction(session: AsyncSession, doc_id: str, data: dict) -> Non
                 (document_id, document_type, fields, raw_json, summary,
                  key_insights, action_items, warnings, confidence, processing_time_ms)
             VALUES
-                (:document_id, :document_type, :fields, :raw_json, :summary,
-                 :key_insights, :action_items, :warnings, :confidence, :processing_time_ms)
+                (:document_id, :document_type, CAST(:fields AS jsonb), CAST(:raw_json AS jsonb), :summary,
+                 CAST(:key_insights AS jsonb), CAST(:action_items AS jsonb), CAST(:warnings AS jsonb),
+                 :confidence, :processing_time_ms)
             ON CONFLICT (document_id) DO UPDATE SET
                 document_type = EXCLUDED.document_type,
                 fields = EXCLUDED.fields,
@@ -157,12 +164,12 @@ async def save_extraction(session: AsyncSession, doc_id: str, data: dict) -> Non
         {
             "document_id": doc_id,
             "document_type": _enum_val(data.get("document_type", "unknown")),
-            "fields": data.get("fields", []),
-            "raw_json": data.get("raw_json", {}),
+            "fields": _jsonb(data.get("fields", [])),
+            "raw_json": _jsonb(data.get("raw_json", {})),
             "summary": data.get("summary", ""),
-            "key_insights": data.get("key_insights", []),
-            "action_items": data.get("action_items", []),
-            "warnings": data.get("warnings", []),
+            "key_insights": _jsonb(data.get("key_insights", [])),
+            "action_items": _jsonb(data.get("action_items", [])),
+            "warnings": _jsonb(data.get("warnings", [])),
             "confidence": data.get("confidence", 0.0),
             "processing_time_ms": data.get("processing_time_ms", 0),
         },

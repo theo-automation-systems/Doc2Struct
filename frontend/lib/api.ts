@@ -13,7 +13,7 @@ const TIMEOUT = {
   upload: 120_000,
 } as const;
 
-function fetchWithTimeout(url: string, init: RequestInit = {}, ms = TIMEOUT.read) {
+function fetchWithTimeout(url: string, init: RequestInit = {}, ms: number = TIMEOUT.read) {
   return fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
 }
 

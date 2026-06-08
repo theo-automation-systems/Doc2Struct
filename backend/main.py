@@ -17,7 +17,7 @@ load_dotenv()
 from app.routes.documents import router as documents_router
 from app.routes.automations import router as automations_router
 
-BUILD_VERSION = "groq-v1"
+BUILD_VERSION = "groq-v2-jsonb"
 logger = logging.getLogger(__name__)
 
 

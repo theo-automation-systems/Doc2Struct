@@ -275,8 +275,8 @@ export function DocumentPreview({ document, isAnalyzing = false }: DocumentPrevi
               <div className="text-center max-w-sm">
                 <p className="text-sm font-semibold text-foreground">Extraction echouee</p>
                 <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                  {document.errorMessage?.includes("insufficient_quota") || document.errorMessage?.includes("429")
-                    ? "Quota API depasse. Verifie ta cle Groq sur console.groq.com ou entre une autre cle dans Settings."
+                  {document.errorMessage?.match(/429|quota|rate_limit|rate limit/i)
+                    ? "Limite Groq atteinte (quota ou rate limit). Attends 1 min et reessaie, ou entre une autre cle dans Settings."
                     : document.errorMessage?.slice(0, 200) ?? "Une erreur est survenue lors de l'analyse."}
                 </p>
               </div>

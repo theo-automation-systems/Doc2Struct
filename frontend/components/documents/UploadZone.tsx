@@ -104,7 +104,6 @@ export function UploadZone({ onUploadComplete, onFileAccepted, compact }: Upload
       <motion.div
         animate={{
           borderColor: isDragging ? "var(--primary)" : "var(--border)",
-          backgroundColor: isDragging ? "color-mix(in srgb, var(--primary) 5%, transparent)" : "transparent",
           scale: isDragging ? 1.01 : 1,
         }}
         transition={{ duration: 0.15 }}
@@ -112,8 +111,9 @@ export function UploadZone({ onUploadComplete, onFileAccepted, compact }: Upload
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         className={cn(
-          "relative border-2 border-dashed rounded-2xl text-center cursor-pointer group transition-all",
-          compact ? "p-4" : "p-8"
+          "relative border-2 border-dashed rounded-2xl text-center cursor-pointer group transition-colors",
+          compact ? "p-4" : "p-8",
+          isDragging ? "bg-primary/5" : "bg-transparent"
         )}
         onClick={() => document.getElementById(inputId)?.click()}
       >
