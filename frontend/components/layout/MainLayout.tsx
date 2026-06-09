@@ -1,50 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Sidebar } from "./Sidebar";
-import { Header } from "./Header";
-import { AIPanel } from "./AIPanel";
-import { cn } from "@/lib/utils";
+import { AppShell } from "./AppShell";
 
 interface MainLayoutProps {
   children: React.ReactNode;
-  title: string;
+  title?: string;
   subtitle?: string;
   documentName?: string;
 }
 
-export function MainLayout({ children, title, subtitle, documentName }: MainLayoutProps) {
-  const [aiPanelOpen, setAiPanelOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
-      {/* Sidebar */}
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
-
-      {/* Main Area */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header
-          title={title}
-          subtitle={subtitle}
-          aiPanelOpen={aiPanelOpen}
-          onToggleAIPanel={() => setAiPanelOpen(!aiPanelOpen)}
-          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
-        <main className="flex-1 overflow-hidden flex flex-col">
-          {children}
-        </main>
-      </div>
-
-      {/* AI Panel */}
-      <AIPanel
-        open={aiPanelOpen}
-        onClose={() => setAiPanelOpen(false)}
-        documentName={documentName}
-      />
-    </div>
-  );
+/** @deprecated Use AppShell directly. Kept for legacy pages. */
+export function MainLayout({ children }: MainLayoutProps) {
+  return <AppShell>{children}</AppShell>;
 }

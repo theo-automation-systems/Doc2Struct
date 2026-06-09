@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, FileText, X, CheckCircle2, Loader2, FileUp, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,9 +19,12 @@ interface UploadZoneProps {
   onFileAccepted?: (file: File) => Promise<void>;
   /** Compact mode for embedding in sidebars */
   compact?: boolean;
+  /** Open native file picker on mount */
+  autoOpen?: boolean;
 }
 
-export function UploadZone({ onUploadComplete, onFileAccepted, compact }: UploadZoneProps) {
+export function UploadZone({ onUploadComplete, onFileAccepted, compact, autoOpen }: UploadZoneProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
 
@@ -96,7 +99,11 @@ export function UploadZone({ onUploadComplete, onFileAccepted, compact }: Upload
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const inputId = `file-input-${Math.random().toString(36).slice(2, 6)}`;
+  useEffect(() => {
+    if (!autoOpen) return;
+    const t = setTimeout(() => fileInputRef.current?.click(), 250);
+    return () => clearTimeout(t);
+  }, [autoOpen]);
 
   return (
     <div className="space-y-4">
@@ -115,10 +122,10 @@ export function UploadZone({ onUploadComplete, onFileAccepted, compact }: Upload
           compact ? "p-4" : "p-8",
           isDragging ? "bg-primary/5" : "bg-transparent"
         )}
-        onClick={() => document.getElementById(inputId)?.click()}
+        onClick={() => fileInputRef.current?.click()}
       >
         <input
-          id={inputId}
+          ref={fileInputRef}
           type="file"
           className="hidden"
           multiple
@@ -224,7 +231,7 @@ export function UploadZone({ onUploadComplete, onFileAccepted, compact }: Upload
                     </div>
                   )}
                   {uf.status === "completed" && (
-                    <p className="text-[11px] text-emerald-600">Upload complete — AI processing started</p>
+                    <p className="text-[11px] text-emerald-600">Upload complete</p>
                   )}
                 </div>
                 <button

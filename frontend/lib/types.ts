@@ -15,6 +15,8 @@ export interface Document {
   extractedFields?: number;
   summary?: string;
   errorMessage?: string;
+  /** Local test file served from /public/samples — triggers real Groq upload */
+  sampleUrl?: string;
 }
 
 export interface ExtractionField {

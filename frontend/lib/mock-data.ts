@@ -1,48 +1,124 @@
 import type { Document, ExtractionResult, Automation, ActivityItem, AIInsight } from "./types";
 
-// Demo documents — unanalyzed, waiting for real AI extraction
-export const mockDocuments: Document[] = [
+/**
+ * Sample test documents — real PDFs in /public/samples, not pre-analyzed.
+ * Click Analyze in the preview to run AI extraction.
+ */
+export const sampleDocuments: Document[] = [
   {
-    id: "demo_001",
-    name: "Invoice_Acme_Corp_Q4-2025.pdf",
+    id: "sample_invoice",
+    name: "sample-invoice.pdf",
     type: "invoice",
     status: "pending",
-    size: 248320,
-    pages: 2,
-    uploadedAt: "2025-12-18T09:24:00Z",
+    size: 6000,
+    pages: 1,
+    uploadedAt: "2026-01-01T00:00:00Z",
+    sampleUrl: "/samples/sample-invoice.pdf",
   },
   {
-    id: "demo_002",
-    name: "Resume_Sarah_Mitchell_SeniorDev.pdf",
+    id: "sample_resume",
+    name: "sample-resume.pdf",
     type: "resume",
     status: "pending",
-    size: 186420,
-    pages: 3,
-    uploadedAt: "2025-12-17T14:12:00Z",
+    size: 5500,
+    pages: 1,
+    uploadedAt: "2026-01-01T00:00:00Z",
+    sampleUrl: "/samples/sample-resume.pdf",
   },
   {
-    id: "demo_003",
-    name: "Contract_NDA_TechVentures_2025.pdf",
+    id: "sample_contract",
+    name: "sample-contract.pdf",
     type: "contract",
     status: "pending",
-    size: 524288,
-    pages: 8,
-    uploadedAt: "2025-12-17T11:30:00Z",
+    size: 5800,
+    pages: 1,
+    uploadedAt: "2026-01-01T00:00:00Z",
+    sampleUrl: "/samples/sample-contract.pdf",
   },
   {
-    id: "demo_004",
-    name: "Q3_Financial_Report_2025.pdf",
+    id: "sample_report",
+    name: "sample-report.pdf",
     type: "report",
     status: "pending",
-    size: 1048576,
-    pages: 24,
-    uploadedAt: "2025-12-16T16:45:00Z",
+    size: 5900,
+    pages: 1,
+    uploadedAt: "2026-01-01T00:00:00Z",
+    sampleUrl: "/samples/sample-report.pdf",
   },
 ];
 
-// No pre-computed extractions — real AI results come from the backend
-export const mockExtractionResults: Record<string, ExtractionResult> = {
-};
+/** Stale API uploads hidden from the default workspace list (dev/demo pollution). */
+export const HIDDEN_API_DOC_NAMES = new Set(["client-capex-request.pdf"]);
+
+/** @deprecated use sampleDocuments */
+export const mockDocuments = sampleDocuments;
+
+export const mockExtractionResults: Record<string, ExtractionResult> = {};
+
+export const SAMPLE_DOC_IDS = new Set(sampleDocuments.map((d) => d.id));
+
+/** Optional demo PDF — upload manually to test unknown/internal form extraction. */
+export const DEMO_CAPEX_SAMPLE = {
+  name: "client-capex-request.pdf",
+  sampleUrl: "/samples/client-capex-request.pdf",
+} as const;
+
+/** Resolve local PDF URL for preview (samples + re-uploaded sample files) */
+export function resolveSamplePdfUrl(doc: Document): string | null {
+  if (doc.sampleUrl) return doc.sampleUrl;
+  const match = sampleDocuments.find((s) => s.name === doc.name);
+  if (match?.sampleUrl) return match.sampleUrl;
+  if (doc.name === DEMO_CAPEX_SAMPLE.name) return DEMO_CAPEX_SAMPLE.sampleUrl;
+  return null;
+}
+
+/** @deprecated use SAMPLE_DOC_IDS */
+export const DEMO_DOC_IDS = SAMPLE_DOC_IDS;
+
+export function mergeWithSampleDocuments(
+  apiDocs: Document[],
+  hiddenSampleIds?: Set<string>
+): Document[] {
+  const apiNames = new Set(apiDocs.map((d) => d.name));
+  const hidden = hiddenSampleIds ?? new Set<string>();
+  const samples = sampleDocuments.filter(
+    (d) => !apiNames.has(d.name) && !hidden.has(d.id)
+  );
+  return [...apiDocs, ...samples];
+}
+
+/** Update API docs in the list without re-injecting samples from the catalog. */
+export function upsertApiDocument(
+  prev: Document[],
+  apiDoc: Document,
+  removeIds: string[] = [],
+): Document[] {
+  const removed = new Set(removeIds);
+  const apiNames = new Set([apiDoc.name]);
+
+  const apiDocs = [
+    apiDoc,
+    ...prev.filter(
+      (d) =>
+        !SAMPLE_DOC_IDS.has(d.id) &&
+        d.id !== apiDoc.id &&
+        !removed.has(d.id)
+    ),
+  ];
+  apiDocs.forEach((d) => apiNames.add(d.name));
+
+  const keptSamples = prev.filter(
+    (d) =>
+      SAMPLE_DOC_IDS.has(d.id) &&
+      !removed.has(d.id) &&
+      !apiNames.has(d.name)
+  );
+
+  return [...apiDocs, ...keptSamples];
+}
+
+/** @deprecated */
+export const mergeWithDemoDocuments = mergeWithSampleDocuments;
 
 export const mockAutomations: Automation[] = [
   {

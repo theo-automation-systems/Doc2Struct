@@ -4,7 +4,6 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Copy,
-  Download,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -19,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ExtractionResult as ExtractionResultType } from "@/lib/types";
+import { getFieldColor } from "@/lib/field-colors";
 
 function ConfidenceBar({ value }: { value: number }) {
   const color = value >= 95 ? "bg-emerald-500" : value >= 80 ? "bg-amber-500" : "bg-red-500";
@@ -96,8 +96,14 @@ function FieldRow({ field, index }: { field: ExtractionResultType["fields"][0]; 
 
 type ViewMode = "table" | "cards" | "json";
 
-export function ExtractionResultPanel({ result }: { result: ExtractionResultType }) {
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
+export function ExtractionResultPanel({
+  result,
+  compact = false,
+}: {
+  result: ExtractionResultType;
+  compact?: boolean;
+}) {
+  const [viewMode, setViewMode] = useState<ViewMode>(compact ? "cards" : "table");
   const [copied, setCopied] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(true);
 
@@ -108,9 +114,9 @@ export function ExtractionResultPanel({ result }: { result: ExtractionResultType
   };
 
   return (
-    <div className="space-y-4">
+    <div className={cn("space-y-4", compact && "space-y-3")}>
       {/* Summary Card */}
-      <div className="bg-card rounded-2xl border border-border overflow-hidden">
+      <div className={cn("bg-card rounded-2xl border border-border overflow-hidden", compact && "rounded-xl")}>
         <button
           onClick={() => setSummaryExpanded(!summaryExpanded)}
           className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors"
@@ -138,10 +144,10 @@ export function ExtractionResultPanel({ result }: { result: ExtractionResultType
             animate={{ height: "auto" }}
             className="border-t border-border overflow-hidden"
           >
-            <div className="px-5 py-4 space-y-4">
-              <p className="text-sm text-muted-foreground leading-relaxed">{result.summary}</p>
+            <div className={cn("px-5 py-4 space-y-4", compact && "px-4 py-3 space-y-3")}>
+              <p className={cn("text-sm text-muted-foreground leading-relaxed", compact && "text-xs")}>{result.summary}</p>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className={cn("grid gap-3", compact ? "grid-cols-1" : "grid-cols-1 md:grid-cols-3")}>
                 {result.keyInsights.length > 0 && (
                   <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/15">
                     <p className="text-[11px] font-semibold text-blue-500 uppercase tracking-wide mb-2">Key Insights</p>
@@ -188,14 +194,16 @@ export function ExtractionResultPanel({ result }: { result: ExtractionResultType
       </div>
 
       {/* Extraction Data */}
-      <div className="bg-card rounded-2xl border border-border overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+      <div className={cn("bg-card rounded-2xl border border-border overflow-hidden", compact && "rounded-xl")}>
+        <div className={cn(
+          "flex items-center justify-between px-5 py-4 border-b border-border",
+          compact && "px-4 py-3 flex-col items-start gap-2"
+        )}>
           <div>
-            <p className="text-sm font-semibold">Extracted Fields</p>
+            <p className={cn("text-sm font-semibold", compact && "text-xs")}>Extracted fields</p>
             <p className="text-xs text-muted-foreground">{result.fields.length} fields · {result.processingTime}ms</p>
           </div>
-          <div className="flex items-center gap-2">
-            {/* View Mode Toggle */}
+          <div className={cn("flex items-center gap-2", compact && "w-full justify-between")}>
             <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
               {[
                 { mode: "table" as ViewMode, icon: Table2 },
@@ -216,11 +224,7 @@ export function ExtractionResultPanel({ result }: { result: ExtractionResultType
             </div>
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={copyJson}>
               {copied ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-              {copied ? "Copied!" : "Copy JSON"}
-            </Button>
-            <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5">
-              <Download className="w-3 h-3" />
-              Export
+              {copied ? "Copied" : "JSON"}
             </Button>
           </div>
         </div>
@@ -245,14 +249,22 @@ export function ExtractionResultPanel({ result }: { result: ExtractionResultType
         )}
 
         {viewMode === "cards" && (
-          <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-3">
-            {result.fields.map((field, i) => (
+          <div className={cn("p-4 grid gap-3", compact ? "grid-cols-1" : "grid-cols-2 md:grid-cols-3")}>
+            {result.fields.map((field, i) => {
+              const color = getFieldColor(i);
+              return (
               <motion.div
                 key={field.key}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: i * 0.04 }}
-                className="p-3 rounded-xl bg-muted/30 border border-border hover:border-primary/20 transition-colors"
+                className={cn(
+                  "p-3 rounded-xl border transition-colors",
+                  color.bg,
+                  color.border,
+                  "hover:ring-1",
+                  color.ring
+                )}
               >
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
                   {field.key.replace(/_/g, " ")}
@@ -262,7 +274,8 @@ export function ExtractionResultPanel({ result }: { result: ExtractionResultType
                 </p>
                 <ConfidenceBar value={field.confidence} />
               </motion.div>
-            ))}
+            );
+            })}
           </div>
         )}
 

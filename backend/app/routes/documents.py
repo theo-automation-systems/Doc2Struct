@@ -48,6 +48,8 @@ def _resolve_groq_key(client_key: Optional[str]) -> Optional[str]:
 
 _documents_store: dict[str, DocumentMetadata] = {}
 _extractions_store: dict[str, dict] = {}
+# Raw file bytes kept until user triggers analysis (or server restarts)
+_file_cache: dict[str, tuple[bytes, str]] = {}
 
 
 # ── Helpers: abstract over DB vs in-memory ────────────────────────────────────
@@ -107,6 +109,7 @@ async def _save_extraction(doc_id: str, data: dict, session: Optional[AsyncSessi
 
 
 async def _delete_doc(doc_id: str, session: Optional[AsyncSession]) -> None:
+    _file_cache.pop(doc_id, None)
     if session:
         await repo.delete_document(session, doc_id)
     else:
@@ -145,7 +148,7 @@ async def process_document_task(
             effective_key = _resolve_groq_key(api_key)
             engine = ExtractionEngine(api_key=effective_key)
 
-            extraction = await engine.process_document(text)
+            extraction = await engine.process_document(text, filename=filename)
             doc_type_str = extraction["document_type"]
             doc_type = DocumentType(doc_type_str)
 
@@ -202,8 +205,9 @@ async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     groq_api_key: Optional[str] = Query(None, description="Groq API key for processing"),
+    auto_analyze: bool = Query(False, description="Start AI extraction immediately after upload"),
 ):
-    """Upload a document and start async AI processing."""
+    """Upload a document. Analysis runs only when auto_analyze=true or via POST /{id}/analyze."""
     allowed_extensions = {".pdf", ".txt", ".docx", ".xlsx", ".doc", ".xls"}
     if file.filename and not any(file.filename.lower().endswith(ext) for ext in allowed_extensions):
         raise HTTPException(status_code=400, detail="Unsupported file type")
@@ -220,6 +224,8 @@ async def upload_document(
         status=DocumentStatus.pending,
     )
 
+    _file_cache[doc_id] = (file_bytes, file.filename or "document")
+
     if _db_available():
         from ..database import AsyncSessionLocal
         async with AsyncSessionLocal() as session:
@@ -227,11 +233,79 @@ async def upload_document(
     else:
         _documents_store[doc_id] = doc
 
+    if auto_analyze:
+        background_tasks.add_task(
+            process_document_task,
+            doc_id,
+            file_bytes,
+            file.filename or "document",
+            groq_api_key,
+        )
+    return doc
+
+
+@router.post("/{doc_id}/analyze", response_model=DocumentMetadata)
+async def analyze_document(
+    doc_id: str,
+    background_tasks: BackgroundTasks,
+    groq_api_key: Optional[str] = Query(None, description="Groq API key for processing"),
+):
+    """Run AI extraction on a previously uploaded document."""
+    if _db_available():
+        from ..database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            doc = await _get_doc(doc_id, session)
+    else:
+        doc = await _get_doc(doc_id, None)
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.status == DocumentStatus.processing:
+        raise HTTPException(status_code=409, detail="Document is already being analyzed")
+    if doc.status == DocumentStatus.completed:
+        raise HTTPException(status_code=400, detail="Document has already been analyzed")
+
+    cached = _file_cache.get(doc_id)
+    if not cached:
+        raise HTTPException(
+            status_code=400,
+            detail="Original file is no longer available. Please upload the document again.",
+        )
+
+    file_bytes, filename = cached
+
+    if _db_available():
+        from ..database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            await _update_doc_fields(
+                doc_id,
+                session,
+                status=DocumentStatus.processing,
+                error_message=None,
+                processed_at=None,
+                confidence=None,
+                extracted_fields=None,
+                summary=None,
+            )
+            doc = await _get_doc(doc_id, session)
+    else:
+        await _update_doc_fields(
+            doc_id,
+            None,
+            status=DocumentStatus.processing,
+            error_message=None,
+            processed_at=None,
+            confidence=None,
+            extracted_fields=None,
+            summary=None,
+        )
+        doc = await _get_doc(doc_id, None)
+
     background_tasks.add_task(
         process_document_task,
         doc_id,
         file_bytes,
-        file.filename or "document",
+        filename,
         groq_api_key,
     )
     return doc
@@ -278,8 +352,10 @@ async def get_extraction(doc_id: str):
 
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    if doc.status == DocumentStatus.processing or doc.status == DocumentStatus.pending:
+    if doc.status == DocumentStatus.processing:
         raise HTTPException(status_code=202, detail="Document is still being processed")
+    if doc.status == DocumentStatus.pending:
+        raise HTTPException(status_code=404, detail="Document has not been analyzed yet")
     if doc.status == DocumentStatus.failed:
         raise HTTPException(status_code=422, detail=f"Processing failed: {doc.error_message}")
     if not extraction:

@@ -80,13 +80,15 @@ export async function checkBackendHealth(): Promise<boolean> {
 
 export async function uploadDocument(
   file: File,
-  groqApiKey?: string
+  groqApiKey?: string,
+  options?: { autoAnalyze?: boolean }
 ): Promise<APIDocument> {
   const form = new FormData();
   form.append("file", file);
 
   const url = new URL(`${BASE}/api/v1/documents/upload`);
   if (groqApiKey) url.searchParams.set("groq_api_key", groqApiKey);
+  if (options?.autoAnalyze) url.searchParams.set("auto_analyze", "true");
 
   const res = await fetchWithTimeout(url.toString(), { method: "POST", body: form }, TIMEOUT.upload);
   if (!res.ok) {
@@ -121,6 +123,21 @@ export async function getExtraction(id: string): Promise<APIExtractionResult> {
   const res = await fetchWithTimeout(`${BASE}/api/v1/documents/${id}/extraction`);
   if (res.status === 202) throw new Error("PROCESSING"); // still running
   if (!res.ok) throw new Error("Extraction not available");
+  return res.json();
+}
+
+export async function analyzeDocument(
+  id: string,
+  groqApiKey?: string
+): Promise<APIDocument> {
+  const url = new URL(`${BASE}/api/v1/documents/${id}/analyze`);
+  if (groqApiKey) url.searchParams.set("groq_api_key", groqApiKey);
+
+  const res = await fetchWithTimeout(url.toString(), { method: "POST" }, TIMEOUT.upload);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Analysis failed" }));
+    throw new Error(err.detail ?? "Analysis failed");
+  }
   return res.json();
 }
 

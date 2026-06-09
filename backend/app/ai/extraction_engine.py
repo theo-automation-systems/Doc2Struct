@@ -1,6 +1,6 @@
 """
 AI Extraction Engine — uses Groq (OpenAI-compatible API) for classification and extraction.
-Supports invoice, resume, contract, and report extraction schemas.
+Supports invoice, resume, contract, report, and generic unknown document schemas.
 """
 
 import asyncio
@@ -91,7 +91,73 @@ EXTRACTION_SCHEMAS = {
             "outlook": "string",
         },
     },
+    "unknown": {
+        "description": (
+            "Generic internal or business document (forms, capex requests, memos, "
+            "authorizations, procedures). Infer field keys from labels in the source text."
+        ),
+        "fields": {
+            "document_title": "string — main title or form name",
+            "document_subtype": "string — short type label (e.g. capex request, internal memo)",
+            "organization": "string — company or entity name",
+            "department": "string or null",
+            "submitted_by": "string or null — person and role if present",
+            "reference_id": "string or null — request ID, case number, form ID",
+            "submission_date": "date (YYYY-MM-DD) or null",
+            "purpose": "string — request summary / reason for the document",
+            "estimated_cost": "number or null",
+            "currency": "string or null (ISO code)",
+            "budget_code": "string or null",
+            "vendor": "string or null — preferred supplier or third party",
+            "delivery_date": "date (YYYY-MM-DD) or null",
+            "approval_steps": "array of strings — workflow steps and statuses",
+            "attachments_referenced": "array of strings — quoted refs, logs, file IDs",
+            "notes": "string or null",
+            "_dynamic": (
+                "ADD more snake_case keys for every other labeled value in the document "
+                "(e.g. line_number, incident_id, jurisdiction). Do not leave sections empty."
+            ),
+        },
+    },
 }
+
+INTERNAL_FORM_MARKERS = (
+    "internal use only",
+    "capital expenditure",
+    "capex",
+    "approval workflow",
+    "request form",
+    "request id",
+    "submitted by",
+    "budget code",
+    "estimated cost",
+)
+
+REPORT_MARKERS = (
+    "quarterly",
+    "annual report",
+    "net profit",
+    "revenue growth",
+    "earnings per share",
+    "fiscal year",
+    "key performance indicator",
+)
+
+UNKNOWN_FILENAME_HINTS = (
+    "capex",
+    "request",
+    "internal",
+    "form",
+    "memo",
+)
+
+REPORT_KPI_FIELDS = (
+    "revenue",
+    "net_profit",
+    "growth_rate",
+    "period",
+    "key_metrics",
+)
 
 EXTRACTION_SYSTEM = """You are an AI document data extraction specialist.
 Return ONLY valid JSON. No markdown, no explanations.
@@ -103,6 +169,17 @@ UNIFIED_PROMPT = """Analyze this document in a single pass.
 2. Extract fields using the schema for that type (see schemas below)
 3. Write a 2-sentence summary
 4. Provide 3 key_insights, 2 action_items, and any warnings
+
+Classification rules:
+- invoice / resume / contract: only when the document is clearly that type
+- report: only for financial or quarterly/annual reports with KPIs and financial statements
+- unknown: internal forms, capex/purchase requests, memos, procedures, letters, or anything else
+
+When document_type is unknown:
+- Use the unknown schema as a starting point, then ADD snake_case keys for every labeled value in the text
+- Name keys after document labels (e.g. request_id, preferred_vendor, required_delivery)
+- Extract 10–18 populated fields; omit fields that are not in the document (do not return null placeholders)
+- Do NOT use invoice/resume/contract/report field names unless they literally appear in the document
 
 Schemas by type:
 {schemas}
@@ -178,12 +255,103 @@ class ExtractionEngine:
 
     def _normalize_doc_type(self, doc_type: str) -> str:
         doc_type = (doc_type or "unknown").strip().lower()
-        for t in [*EXTRACTION_SCHEMAS.keys(), "unknown"]:
+        aliases = {"generic": "unknown", "form": "unknown", "internal": "unknown", "memo": "unknown"}
+        if doc_type in aliases:
+            return aliases[doc_type]
+        for t in EXTRACTION_SCHEMAS:
             if t in doc_type:
                 return t
         return "unknown"
 
-    async def process_document(self, text: str) -> dict[str, Any]:
+    def _is_empty_value(self, value: Any) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, str) and not value.strip():
+            return True
+        if isinstance(value, (list, dict)) and len(value) == 0:
+            return True
+        return False
+
+    def _field_value(self, fields: dict, key: str) -> Any:
+        data = fields.get(key)
+        if isinstance(data, dict):
+            return data.get("value")
+        return data
+
+    def _filename_suggests_unknown(self, filename: str | None) -> bool:
+        if not filename:
+            return False
+        lowered = filename.lower()
+        return any(hint in lowered for hint in UNKNOWN_FILENAME_HINTS)
+
+    def _looks_like_internal_form(self, text: str) -> bool:
+        lowered = text.lower()
+        hits = sum(1 for marker in INTERNAL_FORM_MARKERS if marker in lowered)
+        if hits >= 1:
+            return not any(marker in lowered for marker in REPORT_MARKERS)
+        return False
+
+    def _looks_like_misclassified_report(self, parsed: dict) -> bool:
+        """Report schema with mostly empty KPIs = likely an internal form."""
+        fields = parsed.get("fields") or {}
+        if not isinstance(fields, dict):
+            return False
+
+        empty_kpis = sum(
+            1 for key in REPORT_KPI_FIELDS if self._is_empty_value(self._field_value(fields, key))
+        )
+        if empty_kpis < 3:
+            return False
+
+        populated = [
+            key
+            for key, data in fields.items()
+            if not key.startswith("_") and not self._is_empty_value(
+                data.get("value") if isinstance(data, dict) else data
+            )
+        ]
+        return len(populated) <= 5
+
+    async def _extract_as_unknown(self, text: str) -> dict:
+        """Second pass when a form was misclassified as report."""
+        schema = json.dumps(EXTRACTION_SCHEMAS["unknown"]["fields"], indent=2)
+        prompt = f"""This is an unknown/internal business document (NOT a financial report).
+
+Extract using the unknown schema below. Add snake_case keys for every labeled value in the text.
+Only include fields present in the document — do not invent report/financial KPI fields.
+
+Schema:
+{schema}
+
+Return JSON:
+{{
+  "document_type": "unknown",
+  "fields": {{"field_name": {{"value": <value>, "confidence": <0-100>}}, ...}},
+  "summary": "...",
+  "key_insights": ["..."],
+  "action_items": ["..."],
+  "warnings": ["..."]
+}}
+
+Document text:
+{text[:4000]}"""
+
+        content = await self._chat(
+            [
+                {"role": "system", "content": EXTRACTION_SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=4096,
+            temperature=0.1,
+            json_mode=True,
+        )
+        return _parse_json_content(content)
+
+    async def process_document(
+        self,
+        text: str,
+        filename: str | None = None,
+    ) -> dict[str, Any]:
         """Single Groq call: classify, extract, summarize (saves API quota)."""
         start_time = time.time()
         schemas = json.dumps(
@@ -204,10 +372,28 @@ class ExtractionEngine:
 
         parsed = _parse_json_content(content)
         doc_type = self._normalize_doc_type(parsed.get("document_type", "unknown"))
+
+        should_reclassify = doc_type == "report" and (
+            self._looks_like_internal_form(text)
+            or self._filename_suggests_unknown(filename)
+            or self._looks_like_misclassified_report(parsed)
+        )
+        if should_reclassify:
+            logger.info(
+                "Re-classifying misclassified report → unknown (file=%s)",
+                filename or "n/a",
+            )
+            parsed = await self._extract_as_unknown(text)
+            doc_type = "unknown"
+
         fields_blob = parsed.get("fields") or {}
         raw_json = fields_blob if isinstance(fields_blob, dict) else parsed
         fields = self._parse_fields(raw_json)
-        confidence = sum(f["confidence"] for f in fields) / len(fields) if fields else 0
+        populated = [f for f in fields if not self._is_empty_value(f.get("value"))]
+        fields = populated or fields
+        confidence = (
+            sum(f["confidence"] for f in fields) / len(fields) if fields else 0
+        )
         processing_time = int((time.time() - start_time) * 1000)
 
         return {
@@ -231,12 +417,15 @@ class ExtractionEngine:
     def _parse_fields(self, raw_json: dict) -> list[dict]:
         fields = []
         for key, data in raw_json.items():
+            if key.startswith("_"):
+                continue
             if isinstance(data, dict) and "value" in data:
+                value = data.get("value")
                 fields.append({
                     "key": key,
-                    "value": data.get("value"),
+                    "value": value,
                     "confidence": float(data.get("confidence", 80)),
-                    "field_type": self._infer_type(data.get("value")),
+                    "field_type": self._infer_type(value),
                 })
             else:
                 fields.append({
