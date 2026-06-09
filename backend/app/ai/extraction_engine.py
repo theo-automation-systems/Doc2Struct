@@ -183,7 +183,7 @@ When document_type is unknown:
 - Extract 10–18 populated fields; omit fields that are not in the document (do not return null placeholders)
 - Do NOT use invoice/resume/contract/report field names unless they literally appear in the document
 - estimated_cost and similar amounts: return as JSON numbers (not strings); keep currency in a separate field
-- approval_steps: return [{step, status}, ...] not a comma-separated string
+- approval_steps: return [{{"step": "...", "status": "..."}}, ...] not a comma-separated string
 - Do not duplicate attachment references in both notes and attachments_referenced
 
 Schemas by type:
@@ -324,7 +324,7 @@ class ExtractionEngine:
 
 Extract using the unknown schema below. Add snake_case keys for every labeled value in the text.
 Only include fields present in the document — do not invent report/financial KPI fields.
-Return monetary amounts as numbers; approval_steps as [{step, status}, ...]; avoid duplicating attachments in notes.
+Return monetary amounts as numbers; approval_steps as [{{"step": "...", "status": "..."}}, ...]; avoid duplicating attachments in notes.
 
 Schema:
 {schema}
