@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatFieldValue } from "@/lib/format-field-value";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ExtractionResult as ExtractionResultType } from "@/lib/types";
@@ -42,9 +43,7 @@ function ConfidenceBar({ value }: { value: number }) {
 
 function FieldRow({ field, index }: { field: ExtractionResultType["fields"][0]; index: number }) {
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(
-    Array.isArray(field.value) ? field.value.join(", ") : String(field.value ?? "—")
-  );
+  const [value, setValue] = useState(formatFieldValue(field.value));
 
   const displayKey = field.key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -270,7 +269,7 @@ export function ExtractionResultPanel({
                   {field.key.replace(/_/g, " ")}
                 </p>
                 <p className="text-sm font-medium text-foreground truncate">
-                  {Array.isArray(field.value) ? field.value.join(", ") : String(field.value ?? "—")}
+                  {formatFieldValue(field.value)}
                 </p>
                 <ConfidenceBar value={field.confidence} />
               </motion.div>

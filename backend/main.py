@@ -17,7 +17,7 @@ load_dotenv()
 from app.routes.documents import router as documents_router
 from app.routes.automations import router as automations_router
 
-BUILD_VERSION = "groq-v6-capex-fix"
+BUILD_VERSION = "groq-v7-field-normalize"
 logger = logging.getLogger(__name__)
 
 

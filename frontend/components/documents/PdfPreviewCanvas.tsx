@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import type { ExtractionField } from "@/lib/types";
 import { getFieldColor } from "@/lib/field-colors";
 import { applyPdfJsPolyfills } from "@/lib/pdf-polyfills";
+import { formatFieldValue } from "@/lib/format-field-value";
 
 type PdfTextItem = {
   str: string;
@@ -36,10 +37,10 @@ interface PdfPreviewCanvasProps {
 }
 
 const PDF_WORKER_SRC = "/pdf.worker.min.mjs";
+const A4_RATIO = 595 / 842;
 
 function fieldDisplayValue(field: ExtractionField): string {
-  if (field.value === null || field.value === undefined || field.value === "") return "";
-  return Array.isArray(field.value) ? field.value.join(", ") : String(field.value);
+  return formatFieldValue(field.value).replace(/—/g, "").trim();
 }
 
 function buildSearchVariants(field: ExtractionField): string[] {
@@ -70,6 +71,17 @@ function buildSearchVariants(field: ExtractionField): string[] {
 
   const noSpaces = raw.replace(/\s+/g, "");
   if (noSpaces !== raw) variants.add(noSpaces);
+
+  if (Array.isArray(field.value)) {
+    for (const item of field.value) {
+      if (item && typeof item === "object") {
+        for (const part of Object.values(item as Record<string, unknown>)) {
+          const s = String(part ?? "").trim();
+          if (s.length >= 2) variants.add(s);
+        }
+      }
+    }
+  }
 
   return [...variants]
     .filter((v) => v.length >= 2)
@@ -173,11 +185,6 @@ function waitForLayout(): Promise<void> {
   });
 }
 
-function readContainerWidth(el: HTMLDivElement | null): number {
-  const width = el?.clientWidth ?? 0;
-  return width > 0 ? width : 640;
-}
-
 export function PdfPreviewCanvas({
   url,
   page,
@@ -185,14 +192,14 @@ export function PdfPreviewCanvas({
   showHighlights,
   scanning,
 }: PdfPreviewCanvasProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [highlights, setHighlights] = useState<HighlightRect[]>([]);
-  const [pageSize, setPageSize] = useState({ width: 1, height: 1 });
+  const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [useNativeViewer, setUseNativeViewer] = useState(false);
-  const [containerWidth, setContainerWidth] = useState(0);
+  const [pageWidth, setPageWidth] = useState(0);
 
   const fieldsKey = JSON.stringify(fields.map((f) => [f.key, f.value]));
 
@@ -202,19 +209,19 @@ export function PdfPreviewCanvas({
   }, [url, page]);
 
   useEffect(() => {
-    const el = containerRef.current;
+    const el = pageRef.current;
     if (!el) return;
 
     const updateWidth = () => {
       const next = el.clientWidth;
-      if (next > 0) setContainerWidth(next);
+      if (next > 0) setPageWidth(next);
     };
 
     updateWidth();
     const ro = new ResizeObserver(updateWidth);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [useNativeViewer]);
 
   const renderPdf = useCallback(async (signal: { cancelled: boolean }) => {
     setLoading(true);
@@ -235,30 +242,50 @@ export function PdfPreviewCanvas({
 
       const pdf = await pdfjs.getDocument(source).promise;
       const pdfPage = await pdf.getPage(page + 1);
-      const width = readContainerWidth(containerRef.current);
+
+      const displayWidth = pageRef.current?.clientWidth || pageWidth || 640;
       const baseViewport = pdfPage.getViewport({ scale: 1 });
-      const scale = width / baseViewport.width;
-      const viewport = pdfPage.getViewport({ scale });
+      const cssScale = displayWidth / baseViewport.width;
+      const dpr = Math.min(
+        typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
+        2.5,
+      );
+      const layoutViewport = pdfPage.getViewport({ scale: cssScale });
+      const renderViewport = pdfPage.getViewport({ scale: cssScale * dpr });
+
+      const cssWidth = layoutViewport.width;
+      const cssHeight = layoutViewport.height;
 
       const canvas = canvasRef.current;
       if (!canvas || signal.cancelled) return;
 
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext("2d", { alpha: false });
       if (!ctx) return;
 
-      const pixelWidth = Math.max(1, Math.floor(viewport.width));
-      const pixelHeight = Math.max(1, Math.floor(viewport.height));
-      canvas.width = pixelWidth;
-      canvas.height = pixelHeight;
-      setPageSize({ width: pixelWidth, height: pixelHeight });
+      canvas.width = Math.max(1, Math.floor(renderViewport.width));
+      canvas.height = Math.max(1, Math.floor(renderViewport.height));
+      setPageSize({ width: cssWidth, height: cssHeight });
 
-      await pdfPage.render({ canvasContext: ctx, viewport, canvas }).promise;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if ("imageSmoothingEnabled" in ctx) ctx.imageSmoothingEnabled = true;
+      if ("imageSmoothingQuality" in ctx) {
+        (ctx as CanvasRenderingContext2D & { imageSmoothingQuality?: string })
+          .imageSmoothingQuality = "high";
+      }
+
+      await pdfPage.render({
+        canvasContext: ctx,
+        viewport: renderViewport,
+        canvas,
+        intent: "display",
+      }).promise;
 
       if (!signal.cancelled && showHighlights && fields.length > 0) {
         const textContent = await pdfPage.getTextContent();
         const rects = computeHighlights(
           textContent.items as PdfTextItem[],
-          viewport,
+          layoutViewport,
           fields,
           pdfjs.Util.transform.bind(pdfjs.Util),
         );
@@ -270,22 +297,27 @@ export function PdfPreviewCanvas({
     } finally {
       if (!signal.cancelled) setLoading(false);
     }
-  }, [url, page, fieldsKey, showHighlights, fields]);
+  }, [url, page, fieldsKey, showHighlights, fields, pageWidth]);
 
   useEffect(() => {
+    if (pageWidth <= 0) return;
     const signal = { cancelled: false };
     void renderPdf(signal);
     return () => {
       signal.cancelled = true;
     };
-  }, [renderPdf, containerWidth]);
+  }, [renderPdf, pageWidth]);
 
   const nativeSrc = page > 0 ? `${url}#page=${page + 1}` : url;
+  const aspectRatio =
+    pageSize.width > 0 && pageSize.height > 0
+      ? `${pageSize.width} / ${pageSize.height}`
+      : `${A4_RATIO}`;
 
   return (
-    <div ref={containerRef} className="relative w-full bg-white min-h-[480px]">
+    <div className="relative w-full bg-[#f4f4f5] min-h-[480px] p-4 sm:p-6">
       {loading && !useNativeViewer && (
-        <div className="absolute inset-0 flex items-center justify-center z-10 bg-white/60">
+        <div className="absolute inset-0 flex items-center justify-center z-10 bg-[#f4f4f5]/80">
           <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       )}
@@ -301,37 +333,39 @@ export function PdfPreviewCanvas({
           className="w-full min-h-[480px] border-0 bg-white"
         />
       ) : (
-      <div className="relative w-full">
-        <canvas ref={canvasRef} className="w-full h-auto block" />
-        {showHighlights && highlights.length > 0 && (
+        <div ref={pageRef} className="relative mx-auto w-full max-w-3xl">
           <div
-            className="absolute top-0 left-0 w-full pointer-events-none"
-            style={{ aspectRatio: `${pageSize.width} / ${pageSize.height}` }}
+            className="relative bg-white shadow-md ring-1 ring-black/5 rounded-sm overflow-hidden"
+            style={{ aspectRatio, width: "100%" }}
           >
-            {highlights.map((rect, i) => {
-              const color = getFieldColor(rect.fieldIndex);
-              return (
-                <motion.div
-                  key={`${rect.fieldIndex}-${i}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: i * 0.06, duration: 0.25 }}
-                  className="absolute rounded-sm"
-                  style={{
-                    left: `${(rect.left / pageSize.width) * 100}%`,
-                    top: `${(rect.top / pageSize.height) * 100}%`,
-                    width: `${(rect.width / pageSize.width) * 100}%`,
-                    height: `${(rect.height / pageSize.height) * 100}%`,
-                    backgroundColor: color.fill,
-                    borderBottom: `2px solid ${color.stroke}`,
-                  }}
-                />
-              );
-            })}
+            <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" />
+            {showHighlights && highlights.length > 0 && pageSize.width > 0 && (
+              <div className="absolute inset-0 pointer-events-none">
+                {highlights.map((rect, i) => {
+                  const color = getFieldColor(rect.fieldIndex);
+                  return (
+                    <motion.div
+                      key={`${rect.fieldIndex}-${i}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.06, duration: 0.25 }}
+                      className="absolute rounded-sm"
+                      style={{
+                        left: `${(rect.left / pageSize.width) * 100}%`,
+                        top: `${(rect.top / pageSize.height) * 100}%`,
+                        width: `${(rect.width / pageSize.width) * 100}%`,
+                        height: `${(rect.height / pageSize.height) * 100}%`,
+                        backgroundColor: color.fill,
+                        borderBottom: `2px solid ${color.stroke}`,
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+            <ScanBeam active={scanning} />
           </div>
-        )}
-        <ScanBeam active={scanning} />
-      </div>
+        </div>
       )}
     </div>
   );

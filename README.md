@@ -1,8 +1,20 @@
 # Doc2Struct
 
-AI-powered document intelligence for enterprise teams — upload unstructured files, extract structured data, and export results in seconds.
+AI-powered document intelligence — upload unstructured files, extract structured data, and export results in seconds.
 
 **Live API:** [doc2struct-production.up.railway.app](https://doc2struct-production.up.railway.app/health)
+
+<p align="center">
+  <img src="docs/screenshots/Dashboard.png" alt="Doc2Struct Dashboard" width="800" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/Workspace.png" alt="Doc2Struct Workspace" width="800" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/Extracted_Fields_Demo.png" alt="Extracted fields with PDF highlights" width="800" />
+</p>
 
 Doc2Struct is a SaaS-style document processing platform that turns PDFs, contracts, invoices, CVs, and internal business documents into validated, structured JSON. It combines a polished product UI with an API-first backend, schema-driven LLM extraction, and production-ready persistence.
 
@@ -14,7 +26,16 @@ Designed for:
 - operations teams digitizing internal forms and requests,
 - pilots and POCs where enterprises want **their own documents** analyzed without manual data entry.
 
-Built as a realistic freelance portfolio product: deployable architecture, clear UX, and a workflow that mirrors how B2B document AI tools are actually sold and adopted.
+Doc2Struct is a document intelligence platform designed for organizations that need to transform unstructured business documents into structured, actionable data.
+
+## Key Features
+
+- AI document extraction
+- Invoice, CV, contract and report support
+- Structured JSON output
+- CSV / JSON / Excel export
+- Interactive PDF highlighting
+- FastAPI + PostgreSQL backend
 
 ## Why This Project?
 
@@ -54,7 +75,7 @@ Unlike ad-hoc prompting in a chat UI, Doc2Struct provides:
 - PDF preview with extracted-field highlights (pdf.js)
 - Light / dark theme
 - Backend connection status in the top navigation
-- Sample documents for demos + one uncategorized client-style document
+- Sample documents for demos + optional enterprise test PDFs
 
 ### AI & Extraction
 
@@ -118,65 +139,6 @@ Dashboard
 - **DB with graceful fallback** — works locally without `DATABASE_URL` (in-memory store)
 - **Sample document catalog** — demo PDFs for sales/POC without requiring client data on day one
 - **Separate Dashboard and Workspace routes** — mirrors enterprise SaaS onboarding vs. power-user flows
-
-## Architecture
-
-```text
-Doc2Struct/
-├── frontend/                    # Next.js app
-│   ├── app/
-│   │   ├── page.tsx             # Dashboard (home)
-│   │   └── workspace/           # 3-column document workspace
-│   ├── components/
-│   │   ├── workspace/           # DocumentWorkspace, ExportActions
-│   │   ├── documents/           # UploadZone, PdfPreviewCanvas, DocumentPreview
-│   │   └── extraction/          # ExtractionResult panel
-│   ├── lib/
-│   │   ├── api.ts               # API client
-│   │   └── hooks/useDocuments.ts
-│   └── public/samples/          # Demo PDFs
-├── backend/
-│   ├── main.py                  # FastAPI app, lifespan, CORS
-│   ├── app/
-│   │   ├── routes/documents.py  # Upload, analyze, export, CRUD
-│   │   ├── ai/extraction_engine.py
-│   │   ├── processing/document_parser.py
-│   │   ├── exports/export_service.py
-│   │   ├── db/document_repo.py
-│   │   └── models/
-│   └── Procfile                   # Railway deployment
-└── samples/                     # PDF generation scripts
-```
-
-### High-Level Flow
-
-```text
-1. User uploads a file on the Dashboard
-2. Frontend POST /api/v1/documents/upload → document stored as pending
-3. User opens Workspace and clicks Analyze
-4. Backend parses the file (PDF/DOCX/XLSX/TXT)
-5. Groq classifies the document and extracts schema-bound fields
-6. Results saved to PostgreSQL + returned to the UI
-7. User exports structured data or deletes the document
-```
-
-### LLM Pipeline
-
-```text
-Raw file bytes
-  ↓
-DocumentParser (pdfplumber / PyMuPDF / docx / xlsx)
-  ↓
-Plain text + page count
-  ↓
-ExtractionEngine (Groq / Llama)
-  ↓
-Classification + schema-specific field extraction
-  ↓
-JSON normalization + confidence scoring
-  ↓
-PostgreSQL + API response + UI highlights
-```
 
 ## Setup
 
@@ -279,13 +241,15 @@ Sample PDFs ship with the frontend under `frontend/public/samples/`:
 | `sample-resume.pdf` | Resume / CV demo |
 | `sample-contract.pdf` | Contract clauses demo |
 | `sample-report.pdf` | Financial report demo |
-| `client-capex-request.pdf` | Uncategorized enterprise internal form |
+| `client-capex-request.pdf` | Enterprise CAPEX internal form (manual upload) |
+| `client-it-access-request.pdf` | IT license & access request form (manual upload) |
 
 Regenerate samples (optional):
 
 ```powershell
 cd samples
 python generate_all_samples.py
+python generate_enterprise_samples.py
 ```
 
 ## API Endpoints
@@ -313,35 +277,29 @@ GET    /api/v1/automations/
 
 Ensure `FRONTEND_URL` is set on the backend so CORS allows your production domain.
 
-## Current Limitations
-
-- No multi-tenant authentication or RBAC yet
-- No webhook / queue-based processing (background tasks run in-process)
-- LLM output quality depends on document scan quality and model limits
-- `/analyze` endpoint deployment may lag behind local code on Railway — frontend includes a compatibility fallback
-- Notion export is defined in the API contract but not fully wired in the UI
-- No automated E2E test suite in the repository yet
-
-## Future Improvements
+## Roadmap
 
 - OAuth / SSO and team workspaces
 - Webhook notifications on analysis complete
-- Redis + worker queue for high-volume batch processing
 - Gmail / SharePoint / Google Drive connectors
 - Custom extraction schemas per customer
 - Prompt versioning and evaluation harness
 - Audit logs and GDPR retention policies
 - Billing and usage metering for SaaS monetization
 
-## Troubleshooting
+## Architecture
 
-| Issue | Fix |
-| --- | --- |
-| **Connected → Offline** in the UI | Check `NEXT_PUBLIC_API_URL`, Railway cold start (wait ~30s), or run the backend locally |
-| Upload works but Analyze does nothing | Verify `GROQ_API_KEY` on the server; check browser Network tab for API errors |
-| Hydration warnings | Hard-refresh after frontend updates (`Ctrl+Shift+R`) |
-| `DATABASE_URL` missing | Backend falls back to in-memory — data is lost on restart |
-| Groq rate limits | Retry after a few seconds; consider a paid Groq tier or model with higher limits |
+```text
+Next.js UI  →  FastAPI API  →  Groq (LLM extraction)  →  PostgreSQL (Neon)
+                     ↓
+              Document parsing (PDF, DOCX, XLSX, TXT)
+```
+
+Monorepo layout: `frontend/` (Next.js app), `backend/` (FastAPI), `samples/` (PDF generators).
+
+```text
+Upload → parse → classify & extract → store → preview + export
+```
 
 ## Portfolio Context
 

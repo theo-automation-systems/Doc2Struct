@@ -110,9 +110,11 @@ EXTRACTION_SCHEMAS = {
             "budget_code": "string or null",
             "vendor": "string or null — preferred supplier or third party",
             "delivery_date": "date (YYYY-MM-DD) or null",
-            "approval_steps": "array of strings — workflow steps and statuses",
+            "approval_steps": (
+                "array of {step: string, status: string} — one object per workflow line"
+            ),
             "attachments_referenced": "array of strings — quoted refs, logs, file IDs",
-            "notes": "string or null",
+            "notes": "string or null — only if not already covered by attachments_referenced",
             "_dynamic": (
                 "ADD more snake_case keys for every other labeled value in the document "
                 "(e.g. line_number, incident_id, jurisdiction). Do not leave sections empty."
@@ -180,6 +182,9 @@ When document_type is unknown:
 - Name keys after document labels (e.g. request_id, preferred_vendor, required_delivery)
 - Extract 10–18 populated fields; omit fields that are not in the document (do not return null placeholders)
 - Do NOT use invoice/resume/contract/report field names unless they literally appear in the document
+- estimated_cost and similar amounts: return as JSON numbers (not strings); keep currency in a separate field
+- approval_steps: return [{step, status}, ...] not a comma-separated string
+- Do not duplicate attachment references in both notes and attachments_referenced
 
 Schemas by type:
 {schemas}
@@ -319,6 +324,7 @@ class ExtractionEngine:
 
 Extract using the unknown schema below. Add snake_case keys for every labeled value in the text.
 Only include fields present in the document — do not invent report/financial KPI fields.
+Return monetary amounts as numbers; approval_steps as [{step, status}, ...]; avoid duplicating attachments in notes.
 
 Schema:
 {schema}
@@ -389,6 +395,7 @@ Document text:
         fields_blob = parsed.get("fields") or {}
         raw_json = fields_blob if isinstance(fields_blob, dict) else parsed
         fields = self._parse_fields(raw_json)
+        fields, raw_json = self._postprocess_fields(fields, raw_json)
         populated = [f for f in fields if not self._is_empty_value(f.get("value"))]
         fields = populated or fields
         confidence = (
@@ -407,6 +414,151 @@ Document text:
             "confidence": round(confidence, 1),
             "processing_time_ms": processing_time,
         }
+
+    def _parse_money_number(self, value: Any) -> Any:
+        if value is None or isinstance(value, (int, float)):
+            return value
+        if not isinstance(value, str):
+            return value
+        cleaned = re.sub(r"[^\d.,-]", "", value.replace(" ", ""))
+        if not cleaned:
+            return value
+        if "," in cleaned and "." in cleaned:
+            cleaned = cleaned.replace(",", "")
+        elif "," in cleaned:
+            parts = cleaned.split(",")
+            cleaned = (
+                parts[0].replace(".", "") + "." + parts[-1]
+                if len(parts) == 2 and len(parts[-1]) == 2
+                else cleaned.replace(",", "")
+            )
+        try:
+            return float(cleaned) if "." in cleaned else int(cleaned)
+        except ValueError:
+            return value
+
+    def _parse_approval_steps(self, value: Any) -> Any:
+        if isinstance(value, list):
+            normalized: list[dict[str, str]] = []
+            for item in value:
+                if isinstance(item, dict):
+                    step = str(item.get("step") or item.get("name") or "").strip()
+                    status = str(item.get("status") or item.get("state") or "").strip()
+                    if step:
+                        normalized.append({"step": step, "status": status or "Unknown"})
+                elif isinstance(item, str) and item.strip():
+                    parsed = self._parse_approval_step_line(item.strip())
+                    if parsed:
+                        normalized.append(parsed)
+            return normalized or value
+
+        if isinstance(value, str) and value.strip():
+            steps: list[dict[str, str]] = []
+            chunks = re.split(r",\s+(?=[^:,]+:)|\n+", value)
+            for chunk in chunks:
+                parsed = self._parse_approval_step_line(chunk.strip())
+                if parsed:
+                    steps.append(parsed)
+            if not steps:
+                for chunk in value.split(","):
+                    parsed = self._parse_approval_step_line(chunk.strip())
+                    if parsed:
+                        steps.append(parsed)
+            return steps or value
+
+        return value
+
+    def _parse_approval_step_line(self, line: str) -> dict[str, str] | None:
+        line = re.sub(r"^\d+\.\s*", "", line).strip()
+        if not line:
+            return None
+        if ":" in line:
+            step, status = line.split(":", 1)
+            step, status = step.strip(), status.strip()
+            if step:
+                return {"step": step, "status": status or "Unknown"}
+        return {"step": line, "status": "Unknown"}
+
+    def _deduplicate_notes_attachments(self, fields_by_key: dict[str, dict]) -> None:
+        notes_field = fields_by_key.get("notes")
+        att_field = fields_by_key.get("attachments_referenced")
+        if not notes_field or not att_field:
+            return
+
+        notes = notes_field.get("value")
+        attachments = att_field.get("value")
+        if not isinstance(notes, str) or not notes.strip():
+            return
+
+        att_list = (
+            attachments
+            if isinstance(attachments, list)
+            else [str(attachments)]
+            if attachments
+            else []
+        )
+        if not att_list:
+            return
+
+        note_lower = notes.lower().strip()
+        refs_in_notes = sum(
+            1 for ref in att_list if str(ref).lower() in note_lower
+        )
+        if refs_in_notes == 0:
+            return
+
+        trimmed = notes
+        for ref in att_list:
+            trimmed = re.sub(re.escape(str(ref)), "", trimmed, flags=re.IGNORECASE)
+        trimmed = re.sub(
+            r"(?i)\battach(?:ment)?s?\b[^.]*\.?",
+            "",
+            trimmed,
+        ).strip(" .,;")
+
+        if len(trimmed) < 12 or refs_in_notes >= max(1, len(att_list) // 2):
+            fields_by_key.pop("notes", None)
+        else:
+            notes_field["value"] = trimmed
+
+    def _postprocess_fields(
+        self,
+        fields: list[dict],
+        raw_json: dict,
+    ) -> tuple[list[dict], dict]:
+        fields_by_key = {f["key"]: f for f in fields}
+
+        money_keys = (
+            "estimated_cost",
+            "annual_cost_estimate",
+            "total_amount",
+            "subtotal",
+            "tax_amount",
+        )
+        for key in money_keys:
+            if key in fields_by_key:
+                fields_by_key[key]["value"] = self._parse_money_number(
+                    fields_by_key[key]["value"]
+                )
+                if isinstance(fields_by_key[key]["value"], (int, float)):
+                    fields_by_key[key]["field_type"] = "number"
+
+        if "approval_steps" in fields_by_key:
+            normalized = self._parse_approval_steps(fields_by_key["approval_steps"]["value"])
+            fields_by_key["approval_steps"]["value"] = normalized
+            fields_by_key["approval_steps"]["field_type"] = "array"
+
+        self._deduplicate_notes_attachments(fields_by_key)
+
+        updated_fields = list(fields_by_key.values())
+        updated_raw = {
+            key: {
+                "value": f["value"],
+                "confidence": f["confidence"],
+            }
+            for key, f in fields_by_key.items()
+        }
+        return updated_fields, updated_raw
 
     def _fallback_summary(self, doc_type: str, fields: list[dict]) -> str:
         parts = [f"{f['key']}: {f['value']}" for f in fields[:4] if f.get("value")]

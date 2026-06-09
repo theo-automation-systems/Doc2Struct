@@ -57,19 +57,28 @@ export const mockExtractionResults: Record<string, ExtractionResult> = {};
 
 export const SAMPLE_DOC_IDS = new Set(sampleDocuments.map((d) => d.id));
 
-/** Optional demo PDF — upload manually to test unknown/internal form extraction. */
-export const DEMO_CAPEX_SAMPLE = {
-  name: "client-capex-request.pdf",
-  sampleUrl: "/samples/client-capex-request.pdf",
-} as const;
+/** Optional enterprise demo PDFs — upload manually to test unknown/internal forms. */
+export const DEMO_ENTERPRISE_SAMPLES = [
+  {
+    name: "client-capex-request.pdf",
+    sampleUrl: "/samples/client-capex-request.pdf",
+  },
+  {
+    name: "client-it-access-request.pdf",
+    sampleUrl: "/samples/client-it-access-request.pdf",
+  },
+] as const;
+
+/** @deprecated use DEMO_ENTERPRISE_SAMPLES */
+export const DEMO_CAPEX_SAMPLE = DEMO_ENTERPRISE_SAMPLES[0];
 
 /** Resolve local PDF URL for preview (samples + re-uploaded sample files) */
 export function resolveSamplePdfUrl(doc: Document): string | null {
   if (doc.sampleUrl) return doc.sampleUrl;
   const match = sampleDocuments.find((s) => s.name === doc.name);
   if (match?.sampleUrl) return match.sampleUrl;
-  if (doc.name === DEMO_CAPEX_SAMPLE.name) return DEMO_CAPEX_SAMPLE.sampleUrl;
-  return null;
+  const enterprise = DEMO_ENTERPRISE_SAMPLES.find((s) => s.name === doc.name);
+  return enterprise?.sampleUrl ?? null;
 }
 
 /** @deprecated use SAMPLE_DOC_IDS */

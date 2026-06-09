@@ -70,13 +70,13 @@ export default function DashboardPage() {
   return (
     <AppShell>
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-8 py-12 space-y-12">
+        <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
 
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="space-y-6"
+            className="space-y-4"
           >
             <div className="space-y-3">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/8 border border-primary/15 text-xs font-medium text-primary">
@@ -93,8 +93,8 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-              <UploadZone onFileAccepted={handleUpload} />
+            <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+              <UploadZone onFileAccepted={handleUpload} size="sm" />
             </div>
 
             <div className="flex items-center gap-3">
@@ -140,7 +140,7 @@ export default function DashboardPage() {
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-4"
+              className="space-y-3 pt-1"
             >
               <div className="flex items-center justify-between">
                 <div>
