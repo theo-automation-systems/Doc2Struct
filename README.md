@@ -1,9 +1,13 @@
 # Doc2Struct
 
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon-blue)
+![Groq](https://img.shields.io/badge/LLM-Groq-orange)
+
 AI-powered document intelligence — upload unstructured files, extract structured data, and export results in seconds.
 
-**Live API:** [doc2struct-production.up.railway.app](https://doc2struct-production.up.railway.app/health)  
-**Live App:** run locally ([Quick start](#quick-start)) — UI screenshots below. The production frontend is not deployed yet (API on Railway; UI targets Vercel).
+**Live App:** [doc2-struct.vercel.app](https://doc2-struct.vercel.app)
 
 <p align="center">
   <img src="docs/screenshots/Dashboard.png" alt="Doc2Struct Dashboard" width="800" />
@@ -67,8 +71,8 @@ Unlike ad-hoc prompting in a chat UI, Doc2Struct provides:
 
 ### Product UX
 
-- **Dashboard** (`/`) — upload entry point, KPIs, recent documents
-- **Workspace** (`/workspace`) — document list, PDF preview, AI analysis panel
+- **Dashboard** ([doc2-struct.vercel.app](https://doc2-struct.vercel.app)) — upload entry point, KPIs, recent documents
+- **Workspace** ([doc2-struct.vercel.app/workspace](https://doc2-struct.vercel.app/workspace)) — document list, PDF preview, AI analysis panel
 - Drag-and-drop upload (PDF, DOCX, XLSX, TXT — up to 50 MB)
 - Manual **Analyze** workflow with live scanning feedback
 - PDF preview with extracted-field highlights (pdf.js)
@@ -108,7 +112,7 @@ Unlike ad-hoc prompting in a chat UI, Doc2Struct provides:
 | **Database** | Neon PostgreSQL (asyncpg) |
 | **AI** | Groq OpenAI-compatible API (Llama 3.1 / 3.3) |
 | **Parsing** | pdfplumber, PyMuPDF, python-docx, pandas, openpyxl |
-| **Deployment** | Railway (API), Vercel-ready frontend |
+| **Deployment** | [Vercel](https://doc2-struct.vercel.app) (frontend), [Railway](https://doc2struct-production.up.railway.app) (API) |
 
 ## Product Flow
 
@@ -160,16 +164,18 @@ Set `GROQ_API_KEY` in `.env`. Add `DATABASE_URL` for persistent storage.
 ```powershell
 cd frontend
 npm install
-copy .env.local.example .env.local   # if present, or create manually
+copy .env.local.example .env.local
 ```
 
 Create `frontend/.env.local`:
 
 ```env
+# Local development
 NEXT_PUBLIC_API_URL=http://localhost:8000
-```
 
-For production, point to your deployed API (e.g. Railway).
+# Production (Vercel)
+# NEXT_PUBLIC_API_URL=https://doc2struct-production.up.railway.app
+```
 
 ### Environment Variables
 
@@ -180,7 +186,7 @@ For production, point to your deployed API (e.g. Railway).
 | `GROQ_API_KEY` | Groq API key for document extraction |
 | `GROQ_MODEL` | Model name (default: `llama-3.3-70b-versatile`) |
 | `DATABASE_URL` | Neon PostgreSQL connection string (optional locally) |
-| `FRONTEND_URL` | Allowed CORS origin for production frontend |
+| `FRONTEND_URL` | Allowed CORS origin (e.g. `https://doc2-struct.vercel.app`) |
 | `MAX_FILE_SIZE_MB` | Upload size limit (default: 50) |
 
 **Frontend** (`frontend/.env.local`)
@@ -216,12 +222,21 @@ cd frontend
 npm run dev
 ```
 
+**Production**
+
+| Service | URL |
+| --- | --- |
+| Dashboard | https://doc2-struct.vercel.app |
+| Workspace | https://doc2-struct.vercel.app/workspace |
+| API | See [API](#api) section |
+
+**Local development**
+
 | Service | URL |
 | --- | --- |
 | Dashboard | http://localhost:3000 |
 | Workspace | http://localhost:3000/workspace |
-| API health | http://localhost:8000/health |
-| OpenAPI docs | http://localhost:8000/docs |
+| API (local) | http://localhost:8000 — Swagger at `/docs` |
 
 ## Demo Dataset
 
@@ -244,7 +259,17 @@ python generate_all_samples.py
 python generate_enterprise_samples.py
 ```
 
-## API Endpoints
+## API
+
+**Production base URL:** `https://doc2struct-production.up.railway.app`
+
+| Resource | URL |
+| --- | --- |
+| **Swagger UI (interactive docs)** | [doc2struct-production.up.railway.app/docs](https://doc2struct-production.up.railway.app/docs) |
+| Health check | [doc2struct-production.up.railway.app/health](https://doc2struct-production.up.railway.app/health) |
+| API root | [doc2struct-production.up.railway.app](https://doc2struct-production.up.railway.app) |
+
+### Endpoints
 
 ```text
 GET    /health
@@ -260,13 +285,14 @@ DELETE /api/v1/documents/{id}
 
 ## Deployment
 
-| Component | Target | Notes |
+| Component | Target | URL / notes |
 | --- | --- | --- |
-| Backend | Railway | `Procfile` + `DATABASE_URL` + `GROQ_API_KEY` |
+| Frontend | Vercel | [doc2-struct.vercel.app](https://doc2-struct.vercel.app) — Root Directory: `frontend` |
+| Backend | Railway | Root Directory: `backend` — API docs in [API](#api) section |
 | Database | Neon | Serverless PostgreSQL |
-| Frontend | Vercel / Railway | Set `NEXT_PUBLIC_API_URL` to the API URL |
 
-Ensure `FRONTEND_URL` is set on the backend so CORS allows your production domain.
+**Vercel:** `NEXT_PUBLIC_API_URL=https://doc2struct-production.up.railway.app`  
+**Railway:** `FRONTEND_URL=https://doc2-struct.vercel.app` (CORS)
 
 ## Roadmap
 
