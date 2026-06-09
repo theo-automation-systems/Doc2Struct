@@ -2,7 +2,8 @@
 
 AI-powered document intelligence — upload unstructured files, extract structured data, and export results in seconds.
 
-**Live API:** [doc2struct-production.up.railway.app](https://doc2struct-production.up.railway.app/health)
+**Live API:** [doc2struct-production.up.railway.app](https://doc2struct-production.up.railway.app/health)  
+**Live App:** run locally ([Quick start](#quick-start)) — UI screenshots below. The production frontend is not deployed yet (API on Railway; UI targets Vercel).
 
 <p align="center">
   <img src="docs/screenshots/Dashboard.png" alt="Doc2Struct Dashboard" width="800" />
@@ -25,8 +26,6 @@ Designed for:
 - legal and procurement teams reviewing contracts,
 - operations teams digitizing internal forms and requests,
 - pilots and POCs where enterprises want **their own documents** analyzed without manual data entry.
-
-Doc2Struct is a document intelligence platform designed for organizations that need to transform unstructured business documents into structured, actionable data.
 
 ## Key Features
 
@@ -99,12 +98,17 @@ Unlike ad-hoc prompting in a chat UI, Doc2Struct provides:
 - CSV (tabular fields)
 - Excel (`.xlsx`)
 
-### Automation Templates (API)
+## Tech Stack
 
-- Invoice Processing
-- Resume Screening
-- Contract Analyzer
-- Financial Report Parser
+| Layer | Technology |
+| --- | --- |
+| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, Framer Motion |
+| **PDF Preview** | pdf.js (pdfjs-dist) |
+| **Backend** | FastAPI, Pydantic, Uvicorn, SQLAlchemy async |
+| **Database** | Neon PostgreSQL (asyncpg) |
+| **AI** | Groq OpenAI-compatible API (Llama 3.1 / 3.3) |
+| **Parsing** | pdfplumber, PyMuPDF, python-docx, pandas, openpyxl |
+| **Deployment** | Railway (API), Vercel-ready frontend |
 
 ## Product Flow
 
@@ -117,18 +121,6 @@ Dashboard
   → Review fields + PDF highlights
   → Export CSV / JSON / Excel
 ```
-
-## Tech Stack
-
-| Layer | Technology |
-| --- | --- |
-| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, Framer Motion |
-| **PDF Preview** | pdf.js (pdfjs-dist) |
-| **Backend** | FastAPI, Pydantic, Uvicorn, SQLAlchemy async |
-| **Database** | Neon PostgreSQL (asyncpg) |
-| **AI** | Groq OpenAI-compatible API (Llama 3.1 / 3.3) |
-| **Parsing** | pdfplumber, PyMuPDF, python-docx, pandas, openpyxl |
-| **Deployment** | Railway (API), Vercel-ready frontend |
 
 ## Key Design Decisions
 
@@ -197,7 +189,7 @@ For production, point to your deployed API (e.g. Railway).
 | --- | --- |
 | `NEXT_PUBLIC_API_URL` | FastAPI base URL |
 
-## Run Locally
+## Quick start
 
 **Option A — Windows launcher**
 
@@ -264,7 +256,6 @@ GET    /api/v1/documents/{id}
 GET    /api/v1/documents/{id}/extraction
 POST   /api/v1/documents/{id}/export
 DELETE /api/v1/documents/{id}
-GET    /api/v1/automations/
 ```
 
 ## Deployment
@@ -301,17 +292,10 @@ Monorepo layout: `frontend/` (Next.js app), `backend/` (FastAPI), `samples/` (PD
 Upload → parse → classify & extract → store → preview + export
 ```
 
-## Portfolio Context
+## What This Project Demonstrates
 
-This project demonstrates end-to-end product delivery for enterprise clients:
-
-- product thinking (Dashboard → Workspace funnel),
-- full-stack implementation (Next.js + FastAPI + PostgreSQL),
-- LLM integration with structured outputs,
-- deployable cloud architecture (Railway + Neon),
-- UX polish suitable for stakeholder demos and POCs.
-
----
-
-**Author:** Freelance full-stack / AI product build  
-**License:** See `LICENSE` if present, or contact for commercial licensing.
+- Full-stack SaaS architecture
+- LLM-powered document extraction
+- Structured data pipelines
+- Production-oriented deployment
+- Enterprise-focused UX
