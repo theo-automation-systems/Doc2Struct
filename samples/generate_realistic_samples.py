@@ -1,0 +1,313 @@
+"""Generate realistic, noisier demo PDFs (multi-line invoice, dense CV, multi-page contract)."""
+
+from pathlib import Path
+
+import fitz
+
+OUT_DIR = Path(__file__).parent
+PUBLIC_DIR = Path(__file__).parent.parent / "frontend" / "public" / "samples"
+
+Line = tuple[str, int, bool]
+
+INVOICE_DETAILED: list[Line] = [
+    ("TAX INVOICE", 20, True),
+    ("LogiTrans Europe BV  |  Ref: LT-INV-88421-R1", 9, False),
+    ("", 8, False),
+    ("LogiTrans Europe BV", 13, True),
+    ("Industrieweg 88, 3044 AS Rotterdam, Netherlands", 9, False),
+    ("VAT: NL854712369B01  |  KvK: 71236984  |  Tel: +31 10 244 8800", 9, False),
+    ("", 10, False),
+    ("BILL TO                          SHIP TO", 10, True),
+    ("Meridian Retail Group SA         Meridian DC — Lyon", 9, False),
+    ("14 Rue de la Bourse              Zone Industrielle Gerland", 9, False),
+    ("69002 Lyon, France               69007 Lyon, France", 9, False),
+    ("VAT: FR82345678901               Attn: Receiving Dock B", 9, False),
+    ("", 10, False),
+    ("Invoice No: INV-2026-88421       PO Reference: MRG-PO-77319", 9, False),
+    ("Issue Date: 2026-04-08           Due Date: 2026-05-08 (Net 30)", 9, False),
+    ("Payment Terms: SEPA transfer     Currency: EUR", 9, False),
+    ("Incoterms: DAP Lyon              Account Manager: S. van Dijk", 9, False),
+    ("", 10, False),
+    ("LINE ITEMS", 11, True),
+    ("SKU        Description                              Qty   Unit      Disc%    Line Total", 8, False),
+    ("-" * 88, 8, False),
+    ("LT-HD500   Heavy-duty pallet jack 2.5t (ser. #PJ-44102)  4   285.00    0%      1,140.00", 8, False),
+    ("LT-RK220   Modular rack bay 2200x1200mm (grey)         12   178.50    5%      2,034.90", 8, False),
+    ("LT-SF100   Safety barrier kit — warehouse lane           6    92.00    0%        552.00", 8, False),
+    ("LT-LB040   LED high-bay luminaire 150W IP65             18    64.75   10%      1,048.95", 8, False),
+    ("LT-CB012   Cable trunking 50mm x 3m (bundle of 10)       5    41.20    0%        206.00", 8, False),
+    ("LT-INS01   On-site installation (day rate)               2   890.00    0%      1,780.00", 8, False),
+    ("LT-TRN-F   Freight — palletized road transport           1   420.00    0%        420.00", 8, False),
+    ("LT-PCK-ENV Eco packaging surcharge (mandatory)          1    35.00    0%         35.00", 8, False),
+    ("LT-EXT-12  Extended warranty 12 months (rack bays)      12    18.00    0%        216.00", 8, False),
+    ("LT-SVC-QA  Pre-delivery QA inspection report             1   150.00    0%        150.00", 8, False),
+    ("LT-DISC-RT Early payment discount (if paid by 2026-04-22)  1  -185.40   0%       -185.40", 8, False),
+    ("", 10, False),
+    ("                                              Subtotal (goods):           7,397.45 EUR", 9, False),
+    ("                                              Shipping & handling:          420.00 EUR", 9, False),
+    ("                                              Packaging surcharge:           35.00 EUR", 9, False),
+    ("                                              Early payment discount:      -185.40 EUR", 9, False),
+    ("                                              Taxable amount:             7,667.05 EUR", 9, False),
+    ("                                              VAT 21% (NL):               1,610.08 EUR", 9, False),
+    ("                                              TOTAL DUE:                  9,277.13 EUR", 11, True),
+    ("", 10, False),
+    ("Remarks: Partial shipment allowed per clause 4.2 of framework agreement FWA-2024-118.", 8, False),
+    ("Late payments accrue 1.25% monthly interest. Disputes must be raised within 10 business days.", 8, False),
+    ("Bank: ING Bank NL  |  IBAN: NL91 INGB 0001 2345 67  |  BIC: INGBNL2A", 8, False),
+    ("Please quote INV-2026-88421 on all remittance advices.", 8, False),
+]
+
+RESUME_DENSE: list[Line] = [
+    ("MARCUS LAURENT", 20, True),
+    ("Senior Data Engineer  |  Paris, France  |  marcus.laurent@proton.me  |  +33 6 42 18 09 77", 9, False),
+    ("LinkedIn: /in/marcus-laurent  |  GitHub: mlaurent  |  Open to EU remote / hybrid", 8, False),
+    ("", 10, False),
+    ("PROFILE", 11, True),
+    ("Data engineer with 14+ years building batch and streaming pipelines for retail, fintech,", 9, False),
+    ("and logistics. Led migrations from on-prem Hadoop to cloud-native stacks (GCP, AWS).", 9, False),
+    ("Strong in SQL, Python, Spark, dbt, Airflow, and data governance (GDPR, lineage).", 9, False),
+    ("", 10, False),
+    ("CORE SKILLS", 11, True),
+    ("Languages: Python, SQL, Scala, Bash  |  Orchestration: Airflow, Dagster, Luigi", 8, False),
+    ("Processing: Spark, Flink, Beam  |  Warehouses: BigQuery, Snowflake, Redshift, PostgreSQL", 8, False),
+    ("Modeling: dbt, dimensional modeling, CDC  |  Infra: Terraform, Docker, K8s (GKE/EKS)", 8, False),
+    ("Observability: Datadog, OpenTelemetry, Great Expectations, Monte Carlo", 8, False),
+    ("", 10, False),
+    ("PROFESSIONAL EXPERIENCE", 11, True),
+    ("Carrefour Digital — Lead Data Engineer (2021 – Present)", 10, True),
+    ("- Own the product analytics lakehouse (12 PB, 400+ daily pipelines, 85 engineers).", 8, False),
+    ("- Cut pipeline SLA breaches 62% by introducing contract tests and partition pruning.", 8, False),
+    ("- Migrated 1,900 legacy Hive jobs to dbt + BigQuery; saved ~EUR 480k/year in compute.", 8, False),
+    ("- Partner with legal on GDPR retention policies and PII tokenization standards.", 8, False),
+    ("", 8, False),
+    ("PayFit — Senior Data Engineer (2018 – 2021)", 10, True),
+    ("- Built payroll event streaming platform (Kafka, Avro, schema registry) for 8 countries.", 8, False),
+    ("- Designed idempotent ingestion for HRIS connectors (Workday, SAP SF, ADP).", 8, False),
+    ("- Mentored 4 engineers; introduced on-call rotation and runbooks for data platform.", 8, False),
+    ("", 8, False),
+    ("Criteo — Data Engineer II (2015 – 2018)", 10, True),
+    ("- Maintained clickstream aggregation jobs processing 900M events/day on Spark.", 8, False),
+    ("- Optimized skewed joins reducing worst-case job runtime from 4h to 35 min.", 8, False),
+    ("", 8, False),
+    ("Capgemini — Consultant, BI & Data (2012 – 2015)", 10, True),
+    ("- Delivered SAP BW / SQL Server warehouses for utilities and public sector clients.", 8, False),
+    ("- Led PoC for real-time fraud scoring using Storm + Redis (BNP Paribas engagement).", 8, False),
+    ("", 8, False),
+    ("Thales — Junior ETL Developer (2010 – 2012)", 10, True),
+    ("- Developed SSIS packages for defense logistics inventory reconciliation.", 8, False),
+    ("", 10, False),
+    ("SELECTED PROJECTS", 11, True),
+    ("OpenRetailLake — OSS toolkit for slowly-changing dimensions on object storage (1.2k stars).", 8, False),
+    ("dbt-codegen-fr — French-language macros for statutory reporting models.", 8, False),
+    ("", 10, False),
+    ("EDUCATION & CERTIFICATIONS", 11, True),
+    ("M.Sc. Distributed Systems, Universite Paris-Saclay, 2010", 9, False),
+    ("B.Sc. Computer Science, Universite de Lille, 2008 (magna cum laude)", 9, False),
+    ("GCP Professional Data Engineer (2023)  |  Databricks Data Engineer Associate (2022)", 8, False),
+    ("AWS Solutions Architect Associate (exp. 2024)  |  TOGAF Foundation (2019)", 8, False),
+    ("", 10, False),
+    ("LANGUAGES", 11, True),
+    ("French (native)  |  English (fluent, C1)  |  German (professional, B2)  |  Spanish (B1)", 8, False),
+    ("", 10, False),
+    ("PUBLICATIONS & TALKS", 11, True),
+    ("- 'Partitioning strategies at scale' — DataEngConf Paris 2024 (speaker).", 8, False),
+    ("- 'Lineage without the pain' — Medium engineering blog, 2023 (12k views).", 8, False),
+    ("- Co-author: INSEE methodological note on retail census imputation (2020).", 8, False),
+    ("", 10, False),
+    ("ADDITIONAL EXPERIENCE (CONTRACT / PART-TIME)", 11, True),
+    ("Freelance — Data platform advisor for 3 early-stage startups (2020 – 2022).", 8, False),
+    ("- Defined MVP analytics schemas and hiring rubrics for founding data teams.", 8, False),
+    ("- Stack audits: Snowflake cost optimization, Airflow DAG hygiene, IAM reviews.", 8, False),
+    ("", 8, False),
+    ("INRIA — Research intern, distributed storage (2009)", 10, True),
+    ("- Prototype erasure coding library in C++ for grid backup prototypes.", 8, False),
+    ("", 10, False),
+    ("TECHNICAL KEYWORDS (ATS)", 11, True),
+    ("Apache Spark, Kafka, Debezium, Airbyte, Fivetran, Looker, Tableau, Superset,", 8, False),
+    ("Delta Lake, Iceberg, Hudi, Parquet, Avro, Protobuf, gRPC, REST, GraphQL,", 8, False),
+    ("CI/CD: GitHub Actions, GitLab CI, Jenkins  |  IaC: Terraform, Pulumi, Ansible", 8, False),
+    ("Security: Vault, KMS, column-level encryption, row access policies, SOC2 controls", 8, False),
+    ("", 10, False),
+    ("VOLUNTEERING", 11, True),
+    ("Mentor — Data Women France (2022 – present): mock interviews and portfolio reviews.", 8, False),
+    ("Organizer — PyData Paris meetup (2019 – 2021): hosted 14 events, 2.5k attendees.", 8, False),
+    ("", 10, False),
+    ("INTERESTS", 11, True),
+    ("Long-distance cycling, contemporary jazz piano, regional French wine mapping side project.", 8, False),
+    ("", 10, False),
+    ("REFERENCES", 11, True),
+    ("Available upon request. Last updated: April 2026.", 8, False),
+]
+
+CONTRACT_MSA: list[Line] = [
+    ("MASTER SERVICES AGREEMENT", 18, True),
+    ("Agreement No: MSA-2026-0447  |  Version 3.1  |  Effective Date: 1 March 2026", 9, False),
+    ("", 12, False),
+    ("BETWEEN:", 11, True),
+    ("(1) Helix Analytics Ltd., a company incorporated in England & Wales (Co. 09871234),", 9, False),
+    ("    registered office 85 City Road, London EC1Y 2AA ('Provider'); and", 9, False),
+    ("(2) Nordhaven Financial Services AB, org. no. 556912-3456, with principal place of", 9, False),
+    ("    business at Sveavagen 44, 111 34 Stockholm, Sweden ('Client').", 9, False),
+    ("", 10, False),
+    ("RECITALS", 11, True),
+    ("A. Client operates regulated payment services across the EEA and requires managed data", 9, False),
+    ("   platform services, including ingestion, transformation, and reporting pipelines.", 9, False),
+    ("B. Provider specializes in cloud data engineering and agrees to deliver the Services", 9, False),
+    ("   as described in Statements of Work ('SOW') executed under this Agreement.", 9, False),
+    ("C. The parties wish to set forth the terms governing their commercial relationship.", 9, False),
+    ("", 10, False),
+    ("1. DEFINITIONS", 11, True),
+    ("1.1 'Affiliate' means any entity controlling, controlled by, or under common control.", 9, False),
+    ("1.2 'Confidential Information' means non-public technical, financial, or business data.", 9, False),
+    ("1.3 'Deliverables' means software, documentation, and reports created for Client.", 9, False),
+    ("1.4 'Services' means professional services described in an applicable SOW.", 9, False),
+    ("1.5 'Service Levels' means availability and support metrics in Appendix B.", 9, False),
+    ("", 10, False),
+    ("2. SCOPE AND SOWs", 11, True),
+    ("2.1 Provider shall perform Services with reasonable skill and care in accordance with", 9, False),
+    ("    industry standards for regulated financial institutions.", 9, False),
+    ("2.2 Each SOW shall specify: scope, timeline, fees, acceptance criteria, and personnel.", 9, False),
+    ("2.3 In case of conflict, this Agreement prevails unless the SOW expressly overrides.", 9, False),
+    ("2.4 Initial SOW attached as Appendix A (Data Platform Modernization — Phase 1).", 9, False),
+    ("", 10, False),
+    ("3. FEES AND PAYMENT", 11, True),
+    ("3.1 Client shall pay fees as set out in the applicable SOW. Time-and-materials rates", 9, False),
+    ("    are capped at EUR 1,250/day for senior engineers unless otherwise agreed.", 9, False),
+    ("3.2 Invoices are due within thirty (30) days of receipt. Late amounts bear interest at", 9, False),
+    ("    1.5% per month or the maximum permitted by law, whichever is lower.", 9, False),
+    ("3.3 Client may dispute invoice lines in good faith within fifteen (15) business days.", 9, False),
+    ("3.4 All fees exclude VAT and applicable withholding taxes.", 9, False),
+    ("", 10, False),
+    ("4. INTELLECTUAL PROPERTY", 11, True),
+    ("4.1 Client owns all Deliverables specifically commissioned and paid for in full.", 9, False),
+    ("4.2 Provider retains pre-existing tools, libraries, and generalized know-how.", 9, False),
+    ("4.3 Provider grants Client a perpetual, royalty-free license to embedded Provider IP", 9, False),
+    ("    required to operate the Deliverables.", 9, False),
+    ("", 10, False),
+    ("5. CONFIDENTIALITY", 11, True),
+    ("5.1 Each party shall protect the other's Confidential Information for five (5) years.", 9, False),
+    ("5.2 Exclusions apply for public domain information and independently developed data.", 9, False),
+    ("5.3 Provider may reference Client as a customer unless Client opts out in writing.", 9, False),
+    ("", 10, False),
+    ("6. DATA PROTECTION", 11, True),
+    ("6.1 Parties shall execute a Data Processing Agreement per GDPR Article 28.", 9, False),
+    ("6.2 Provider shall process personal data only on documented instructions from Client.", 9, False),
+    ("6.3 Sub-processors require prior written approval; current list in Appendix C.", 9, False),
+    ("", 10, False),
+    ("7. WARRANTIES AND DISCLAIMERS", 11, True),
+    ("7.1 Provider warrants Services will be performed professionally and Deliverables will", 9, False),
+    ("    materially conform to specifications for ninety (90) days after acceptance.", 9, False),
+    ("7.2 EXCEPT AS EXPRESSLY STATED, SERVICES ARE PROVIDED 'AS IS' WITHOUT OTHER WARRANTIES.", 9, False),
+    ("", 10, False),
+    ("8. LIMITATION OF LIABILITY", 11, True),
+    ("8.1 Neither party is liable for indirect, consequential, or punitive damages.", 9, False),
+    ("8.2 Aggregate liability is capped at fees paid in the twelve (12) months preceding", 9, False),
+    ("    the claim, except for fraud, gross negligence, or IP infringement.", 9, False),
+    ("8.3 Liability cap does not apply to breaches of confidentiality or data protection.", 9, False),
+    ("", 10, False),
+    ("9. TERM AND TERMINATION", 11, True),
+    ("9.1 This Agreement commences on the Effective Date and continues for three (3) years.", 9, False),
+    ("9.2 Either party may terminate for material breach uncured within thirty (30) days.", 9, False),
+    ("9.3 Client may terminate any SOW for convenience with sixty (60) days' written notice.", 9, False),
+    ("9.4 Upon termination, Provider shall deliver work-in-progress and return Client data.", 9, False),
+    ("", 10, False),
+    ("10. GOVERNING LAW", 11, True),
+    ("10.1 This Agreement is governed by the laws of England and Wales.", 9, False),
+    ("10.2 Courts of London have exclusive jurisdiction, subject to injunctive relief rights.", 9, False),
+    ("", 10, False),
+    ("11. NON-SOLICITATION", 11, True),
+    ("11.1 During the term and for twelve (12) months thereafter, neither party shall solicit", 9, False),
+    ("     employees materially involved in the Services without prior written consent.", 9, False),
+    ("11.2 General job advertisements are excluded from this restriction.", 9, False),
+    ("", 10, False),
+    ("12. FORCE MAJEURE", 11, True),
+    ("12.1 Neither party is liable for delay caused by events beyond reasonable control,", 9, False),
+    ("     including natural disasters, war, strikes, or critical cloud provider outages.", 9, False),
+    ("12.2 The affected party must notify the other within five (5) business days.", 9, False),
+    ("", 10, False),
+    ("13. AUDIT AND COMPLIANCE", 11, True),
+    ("13.1 Provider shall maintain records demonstrating compliance with Service Levels.", 9, False),
+    ("13.2 Client may audit Provider once per year on thirty (30) days' notice, during", 9, False),
+    ("     business hours, subject to confidentiality and minimal disruption.", 9, False),
+    ("13.3 Provider shall cooperate with regulatory inquiries relating to Client data.", 9, False),
+    ("", 10, False),
+    ("14. INSURANCE", 11, True),
+    ("14.1 Provider shall maintain professional indemnity insurance of at least EUR 2,000,000.", 9, False),
+    ("14.2 Certificates of insurance shall be furnished upon Client request.", 9, False),
+    ("", 10, False),
+    ("15. MISCELLANEOUS", 11, True),
+    ("15.1 Neither party may assign this Agreement without consent, except to an Affiliate.", 9, False),
+    ("15.2 Notices must be sent by registered mail or courier to registered offices.", 9, False),
+    ("15.3 Amendments require written agreement signed by authorized representatives.", 9, False),
+    ("15.4 If any clause is invalid, the remainder continues in full force and effect.", 9, False),
+    ("", 12, False),
+    ("APPENDIX A — STATEMENT OF WORK (SUMMARY)", 11, True),
+    ("Project: Data Platform Modernization Phase 1  |  SOW Ref: SOW-2026-0447-A", 9, False),
+    ("Duration: 1 Mar 2026 – 30 Sep 2026  |  Total fixed fee: EUR 420,000", 9, False),
+    ("Milestones: (M1) Landing zone setup; (M2) CDC pipelines; (M3) Regulatory reporting.", 9, False),
+    ("Acceptance: Written sign-off by Client CTO within 10 business days per milestone.", 9, False),
+    ("", 12, False),
+    ("APPENDIX B — SERVICE LEVELS", 11, True),
+    ("P1 incidents: response within 1 hour, workaround within 8 hours (business days).", 9, False),
+    ("P2 incidents: response within 4 hours, resolution target 3 business days.", 9, False),
+    ("P3 incidents: response within 1 business day, resolution target 10 business days.", 9, False),
+    ("Platform availability target: 99.5% monthly excluding scheduled maintenance.", 9, False),
+    ("Scheduled maintenance windows: Sundays 02:00–06:00 CET with 72h prior notice.", 9, False),
+    ("Service credits: 5% of monthly fees per 0.5% availability shortfall below target.", 9, False),
+    ("", 10, False),
+    ("APPENDIX C — APPROVED SUB-PROCESSORS (EXCERPT)", 11, True),
+    ("Amazon Web Services EMEA SARL — cloud infrastructure (Frankfurt, Ireland regions).", 9, False),
+    ("Snowflake Computing — managed warehouse hosting (EU-West deployment).", 9, False),
+    ("Datadog Inc. — monitoring and observability (EU data residency enabled).", 9, False),
+    ("", 12, False),
+    ("SIGNATURES", 11, True),
+    ("Signed for Helix Analytics Ltd.          Signed for Nordhaven Financial Services AB", 9, False),
+    ("Name: _________________________          Name: _________________________", 9, False),
+    ("Title: Chief Commercial Officer          Title: Chief Technology Officer", 9, False),
+    ("Date: _________________________          Date: _________________________", 9, False),
+]
+
+REALISTIC_SAMPLES: dict[str, list[Line]] = {
+    "sample-invoice-detailed.pdf": INVOICE_DETAILED,
+    "sample-resume-dense.pdf": RESUME_DENSE,
+    "sample-contract-msa.pdf": CONTRACT_MSA,
+}
+
+
+def write_pdf_paginated(filename: str, lines: list[Line]) -> tuple[Path, int]:
+    doc = fitz.open()
+    page = doc.new_page(width=595, height=842)
+    margin_top = 50
+    margin_bottom = 780
+    y = margin_top
+
+    for text, size, bold in lines:
+        if not text:
+            y += size * 0.6
+            continue
+        line_height = size * 1.35
+        if y + line_height > margin_bottom:
+            page = doc.new_page(width=595, height=842)
+            y = margin_top
+        font = "hebo" if bold else "helv"
+        page.insert_text((50, y), text, fontname=font, fontsize=size, color=(0.1, 0.1, 0.15))
+        y += line_height
+
+    path = OUT_DIR / filename
+    doc.save(path)
+    page_count = doc.page_count
+    doc.close()
+    return path, page_count
+
+
+def main() -> None:
+    PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
+    for filename, lines in REALISTIC_SAMPLES.items():
+        path, pages = write_pdf_paginated(filename, lines)
+        dest = PUBLIC_DIR / filename
+        dest.write_bytes(path.read_bytes())
+        print(f"Created: {path} ({pages} pages) -> {dest}")
+
+
+if __name__ == "__main__":
+    main()

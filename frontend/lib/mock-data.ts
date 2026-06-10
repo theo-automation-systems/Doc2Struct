@@ -45,6 +45,36 @@ export const sampleDocuments: Document[] = [
     uploadedAt: "2026-01-01T00:00:00Z",
     sampleUrl: "/samples/sample-report.pdf",
   },
+  {
+    id: "sample_invoice_detailed",
+    name: "sample-invoice-detailed.pdf",
+    type: "invoice",
+    status: "pending",
+    size: 9748,
+    pages: 1,
+    uploadedAt: "2026-01-01T00:00:00Z",
+    sampleUrl: "/samples/sample-invoice-detailed.pdf",
+  },
+  {
+    id: "sample_resume_dense",
+    name: "sample-resume-dense.pdf",
+    type: "resume",
+    status: "pending",
+    size: 15953,
+    pages: 2,
+    uploadedAt: "2026-01-01T00:00:00Z",
+    sampleUrl: "/samples/sample-resume-dense.pdf",
+  },
+  {
+    id: "sample_contract_msa",
+    name: "sample-contract-msa.pdf",
+    type: "contract",
+    status: "pending",
+    size: 26454,
+    pages: 3,
+    uploadedAt: "2026-01-01T00:00:00Z",
+    sampleUrl: "/samples/sample-contract-msa.pdf",
+  },
 ];
 
 /** Stale API uploads hidden from the default workspace list (dev/demo pollution). */

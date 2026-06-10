@@ -1,3 +1,5 @@
+**English** | [Français](README.fr.md)
+
 # Doc2Struct
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
@@ -21,255 +23,227 @@ AI-powered document intelligence — upload unstructured files, extract structur
   <img src="docs/screenshots/Extracted_Fields_Demo.png" alt="Extracted fields with PDF highlights" width="800" />
 </p>
 
-Doc2Struct is a SaaS-style document processing platform that turns PDFs, contracts, invoices, CVs, and internal business documents into validated, structured JSON. It combines a polished product UI with an API-first backend, schema-driven LLM extraction, and production-ready persistence.
+## Problem
 
-Designed for:
+Most organizations still rely on manual data entry to process documents such as:
 
-- finance and accounting teams processing invoices,
-- HR departments screening resumes at scale,
-- legal and procurement teams reviewing contracts,
-- operations teams digitizing internal forms and requests,
-- pilots and POCs where enterprises want **their own documents** analyzed without manual data entry.
+- invoices
+- CVs and applications
+- contracts
+- internal forms
+- financial reports
 
-## Key Features
+This leads to:
 
-- AI document extraction
-- Invoice, CV, contract and report support
-- Structured JSON output
-- CSV / JSON / Excel export
-- Interactive PDF highlighting
-- FastAPI + PostgreSQL backend
+- time-consuming manual re-entry
+- human errors in structured systems (CRM, ERP, spreadsheets)
+- slow operational workflows
+- fragmented document handling across tools
 
-## Why This Project?
+## Solution
 
-Organizations still lose hours re-keying data from PDFs into ERPs, spreadsheets, and ticketing systems.
+Doc2Struct automates the transformation of unstructured documents into structured, validated data.
 
-Doc2Struct helps teams:
+It provides:
 
-- upload documents without triggering immediate processing noise,
-- run AI extraction on demand with visible progress,
-- preview PDFs with field-level highlights,
-- review confidence scores and AI summaries before export,
-- export to **CSV, JSON, or Excel** for downstream systems,
-- keep a persistent document history (PostgreSQL on Neon).
+- document upload and storage
+- AI-based classification (invoice, CV, contract, report, etc.)
+- structured field extraction with confidence scoring
+- review interface with PDF-level highlighting
+- export to JSON, CSV, Excel
+- API-first architecture for integration into business systems
 
-The product is intentionally split into a **Dashboard** (entry point + upload) and a **Workspace** (3-column analysis environment) — a flow familiar to enterprise SaaS users.
+## Who This Is For
+
+- Finance teams processing invoices and expense documents
+- HR teams handling CVs and recruitment documents
+- Legal teams reviewing contracts and agreements
+- Operations teams digitizing internal workflows
+- Startups and enterprises building internal automation tools
+
+## Key Capabilities
+
+### Document Processing
+
+- Upload PDFs, DOCX, XLSX, TXT (up to 50MB)
+- Automatic or manual analysis workflow
+- Document lifecycle tracking (upload → analyze → completed)
+
+### AI Extraction
+
+- Schema-driven structured extraction (not free-form text)
+- Document classification
+- Field-level confidence scoring
+- Summaries, key insights, and action extraction
+
+### Review Interface
+
+- Side-by-side PDF preview and extracted fields
+- Highlighted extracted elements inside documents
+- Confidence indicators per field
+- Analysis history and persistence
+
+### Export & Integration
+
+- JSON (full structured output)
+- CSV (tabular data)
+- Excel (.xlsx)
+- REST API for external systems
 
 ## Why Not Just ChatGPT?
 
-Unlike ad-hoc prompting in a chat UI, Doc2Struct provides:
+Unlike generic prompting tools, Doc2Struct provides:
 
-- deterministic document-type schemas (invoice, resume, contract, report),
-- automatic classification of unknown enterprise documents,
-- structured field outputs with per-field confidence,
-- persistent document storage and retrieval,
-- REST API for integration into existing tools,
-- export pipelines ready for finance / BI / ops workflows,
-- a dedicated workspace UX instead of copy-paste from chat.
+- deterministic schemas per document type
+- structured and validated outputs (not raw text)
+- persistent storage and document history
+- repeatable extraction pipelines
+- integration-ready REST API
+- dedicated UX for review and validation
+
+## Product Flow
+
+```text
+Upload document
+  → classify document type
+  → extract structured fields (AI)
+  → review results with PDF highlights
+  → export to business tools (CSV / JSON / Excel)
+```
+
+## Core Design Principles
+
+- **API-first architecture:** every feature is accessible programmatically
+- **Schema-driven extraction:** structured outputs instead of free-form responses
+- **Asynchronous processing:** scalable background analysis workflow
+- **Separation of concerns UI:**
+  - Dashboard = entry + document management
+  - Workspace = analysis + review environment
+- **Graceful degradation:** local fallback mode without database
+- **Cost-aware execution:** analysis triggered explicitly by user action
 
 ## Features
 
-### Product UX
+### UI / UX
 
-- **Dashboard** ([doc2-struct.vercel.app](https://doc2-struct.vercel.app)) — upload entry point, KPIs, recent documents
-- **Workspace** ([doc2-struct.vercel.app/workspace](https://doc2-struct.vercel.app/workspace)) — document list, PDF preview, AI analysis panel
-- Drag-and-drop upload (PDF, DOCX, XLSX, TXT — up to 50 MB)
-- Manual **Analyze** workflow with live scanning feedback
-- PDF preview with extracted-field highlights (pdf.js)
-- Light / dark theme
-- Backend connection status in the top navigation
-- Sample documents for demos + optional enterprise test PDFs
+- Dashboard (upload + recent documents)
+- Workspace (analysis + PDF viewer + extracted fields)
+- Drag & drop upload
+- Manual analysis trigger
+- Dark / light mode
+- Live backend status indicator
 
-### AI & Extraction
+### AI Layer
 
-- Document classification and field extraction via **Groq** (Llama models)
-- Typed schemas per document category
-- Summary, key insights, action items, and warnings
-- Global confidence score and per-field confidence
-- Client-side Groq key override (optional) or server-side key
+- Groq LLM integration (Llama models)
+- Document classification engine
+- Structured extraction pipeline
+- Per-field confidence scoring
+- Summary + insights generation
 
-### API & Data
+### Backend
 
-- FastAPI REST API with OpenAPI docs
-- Upload → pending → analyze → processing → completed lifecycle
-- PostgreSQL persistence (Neon) with in-memory fallback for local dev
-- List, retrieve, delete documents
-- Platform statistics endpoint
+- FastAPI REST API
+- Async document processing pipeline
+- PostgreSQL (Neon) persistence
+- In-memory fallback for local development
+- Full OpenAPI documentation
 
 ### Export
 
-- JSON (full extraction payload)
-- CSV (tabular fields)
-- Excel (`.xlsx`)
+- JSON structured output
+- CSV tabular export
+- Excel export for business workflows
 
 ## Tech Stack
 
 | Layer | Technology |
 | --- | --- |
-| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, Framer Motion |
-| **PDF Preview** | pdf.js (pdfjs-dist) |
-| **Backend** | FastAPI, Pydantic, Uvicorn, SQLAlchemy async |
-| **Database** | Neon PostgreSQL (asyncpg) |
-| **AI** | Groq OpenAI-compatible API (Llama 3.1 / 3.3) |
-| **Parsing** | pdfplumber, PyMuPDF, python-docx, pandas, openpyxl |
-| **Deployment** | [Vercel](https://doc2-struct.vercel.app) (frontend), [Railway](https://doc2struct-production.up.railway.app) (API) |
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn/ui |
+| Backend | FastAPI, Pydantic, SQLAlchemy async, Uvicorn |
+| Database | Neon PostgreSQL (asyncpg) |
+| AI | Groq (Llama 3.1 / 3.3) |
+| Parsing | pdfplumber, PyMuPDF, python-docx, pandas, openpyxl |
+| Deployment | Vercel (frontend), Railway (backend) |
 
-## Product Flow
+## Architecture
 
 ```text
-Dashboard
-  → Upload document
-  → Redirect to Workspace (document pre-selected)
-  → Click Analyze
-  → Background AI extraction (Groq)
-  → Review fields + PDF highlights
-  → Export CSV / JSON / Excel
+Frontend (Next.js)
+        ↓
+FastAPI backend
+        ↓
+LLM extraction (Groq)
+        ↓
+Document parsing layer
+        ↓
+PostgreSQL (Neon)
 ```
 
 ## Key Design Decisions
 
-- **API-first backend** — the UI is a client; integrations can call the same endpoints
-- **Manual analyze by default** — upload stores the file; extraction runs only when the user requests it (cost control + predictable UX)
-- **Optimistic UI + polling** — handles async background processing and Railway cold starts
-- **Schema-driven extraction** — prompts and field contracts per document type, not free-form text
-- **DB with graceful fallback** — works locally without `DATABASE_URL` (in-memory store)
-- **Sample document catalog** — demo PDFs for sales/POC without requiring client data on day one
-- **Separate Dashboard and Workspace routes** — mirrors enterprise SaaS onboarding vs. power-user flows
+- Documents are stored before processing (decoupled workflow)
+- Analysis is explicit (cost + control)
+- Schema-based extraction instead of free-form prompting
+- Optimistic UI with polling for async jobs
+- Multi-format export pipeline for real-world integration
+- Separation of Dashboard / Workspace to mirror enterprise SaaS tools
 
 ## Setup
 
-### Prerequisites
-
-- **Node.js** 20+
-- **Python** 3.11+
-- **Groq API key** from the [Groq Console](https://console.groq.com/keys)
-- **Neon PostgreSQL** URL (optional for local dev — in-memory fallback works)
-
-### Installation
-
-**Backend**
+### Backend
 
 ```powershell
 cd backend
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-copy .env.example .env
 ```
 
-Set `GROQ_API_KEY` in `.env`. Add `DATABASE_URL` for persistent storage.
+Create `.env`:
 
-**Frontend**
+```env
+GROQ_API_KEY=your_key
+DATABASE_URL=your_neon_url
+```
+
+Run:
+
+```powershell
+uvicorn main:app --reload --port 8000
+```
+
+### Frontend
 
 ```powershell
 cd frontend
 npm install
-copy .env.local.example .env.local
-```
-
-Create `frontend/.env.local`:
-
-```env
-# Local development
-NEXT_PUBLIC_API_URL=http://localhost:8000
-
-# Production (Vercel)
-# NEXT_PUBLIC_API_URL=https://doc2struct-production.up.railway.app
-```
-
-### Environment Variables
-
-**Backend** (`backend/.env.example`)
-
-| Variable | Description |
-| --- | --- |
-| `GROQ_API_KEY` | Groq API key for document extraction |
-| `GROQ_MODEL` | Model name (default: `llama-3.3-70b-versatile`) |
-| `DATABASE_URL` | Neon PostgreSQL connection string (optional locally) |
-| `FRONTEND_URL` | Allowed CORS origin (e.g. `https://doc2-struct.vercel.app`) |
-| `MAX_FILE_SIZE_MB` | Upload size limit (default: 50) |
-
-**Frontend** (`frontend/.env.local`)
-
-| Variable | Description |
-| --- | --- |
-| `NEXT_PUBLIC_API_URL` | FastAPI base URL |
-
-## Quick start
-
-**Option A — Windows launcher**
-
-```powershell
-.\start.bat
-```
-
-Opens the frontend at `http://localhost:3000` and the backend at `http://localhost:8000` (if `backend/venv` exists).
-
-**Option B — Manual**
-
-Terminal 1 — API:
-
-```powershell
-cd backend
-.\venv\Scripts\Activate.ps1
-uvicorn main:app --reload --port 8000
-```
-
-Terminal 2 — UI:
-
-```powershell
-cd frontend
 npm run dev
 ```
 
-**Production**
+`.env.local`:
 
-| Service | URL |
-| --- | --- |
-| Dashboard | https://doc2-struct.vercel.app |
-| Workspace | https://doc2-struct.vercel.app/workspace |
-| API | See [API](#api) section |
-
-**Local development**
-
-| Service | URL |
-| --- | --- |
-| Dashboard | http://localhost:3000 |
-| Workspace | http://localhost:3000/workspace |
-| API (local) | http://localhost:8000 — Swagger at `/docs` |
-
-## Demo Dataset
-
-Sample PDFs ship with the frontend under `frontend/public/samples/`:
-
-| File | Purpose |
-| --- | --- |
-| `sample-invoice.pdf` | Invoice extraction demo |
-| `sample-resume.pdf` | Resume / CV demo |
-| `sample-contract.pdf` | Contract clauses demo |
-| `sample-report.pdf` | Financial report demo |
-| `client-capex-request.pdf` | Enterprise CAPEX internal form (manual upload) |
-| `client-it-access-request.pdf` | IT license & access request form (manual upload) |
-
-Regenerate samples (optional):
-
-```powershell
-cd samples
-python generate_all_samples.py
-python generate_enterprise_samples.py
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-## API
+## Deployment
 
-**Production base URL:** `https://doc2struct-production.up.railway.app`
+| Component | Platform |
+| --- | --- |
+| Frontend | [Vercel](https://doc2-struct.vercel.app) — Root Directory: `frontend` |
+| Backend | Railway — Root Directory: `backend` |
+| Database | Neon |
+
+**Vercel:** `NEXT_PUBLIC_API_URL=https://doc2struct-production.up.railway.app`  
+**Railway:** `FRONTEND_URL=https://doc2-struct.vercel.app` (CORS)
+
+### API
 
 | Resource | URL |
 | --- | --- |
-| **Swagger UI (interactive docs)** | [doc2struct-production.up.railway.app/docs](https://doc2struct-production.up.railway.app/docs) |
+| Swagger UI | [doc2struct-production.up.railway.app/docs](https://doc2struct-production.up.railway.app/docs) |
 | Health check | [doc2struct-production.up.railway.app/health](https://doc2struct-production.up.railway.app/health) |
-| API root | [doc2struct-production.up.railway.app](https://doc2struct-production.up.railway.app) |
-
-### Endpoints
 
 ```text
 GET    /health
@@ -283,45 +257,46 @@ POST   /api/v1/documents/{id}/export
 DELETE /api/v1/documents/{id}
 ```
 
-## Deployment
+## Demo Dataset
 
-| Component | Target | URL / notes |
-| --- | --- | --- |
-| Frontend | Vercel | [doc2-struct.vercel.app](https://doc2-struct.vercel.app) — Root Directory: `frontend` |
-| Backend | Railway | Root Directory: `backend` — API docs in [API](#api) section |
-| Database | Neon | Serverless PostgreSQL |
+Sample PDFs ship with the frontend under `frontend/public/samples/`:
 
-**Vercel:** `NEXT_PUBLIC_API_URL=https://doc2struct-production.up.railway.app`  
-**Railway:** `FRONTEND_URL=https://doc2-struct.vercel.app` (CORS)
+| File | Purpose |
+| --- | --- |
+| `sample-invoice.pdf` | Simple invoice (quick smoke test) |
+| `sample-invoice-detailed.pdf` | Realistic B2B invoice — 11 line items, discounts, VAT breakdown |
+| `sample-resume.pdf` | Simple CV (quick smoke test) |
+| `sample-resume-dense.pdf` | Dense 2-page CV — 5 roles, certs, publications |
+| `sample-contract.pdf` | Simple NDA (quick smoke test) |
+| `sample-contract-msa.pdf` | 3-page Master Services Agreement with appendices |
+| `sample-report.pdf` | Financial report demo |
+| `client-capex-request.pdf` | Enterprise CAPEX internal form |
+| `client-it-access-request.pdf` | IT license & access request form |
+
+Regenerate:
+
+```powershell
+cd samples
+python generate_all_samples.py
+python generate_realistic_samples.py
+python generate_enterprise_samples.py
+```
 
 ## Roadmap
 
-- OAuth / SSO and team workspaces
-- Webhook notifications on analysis complete
-- Gmail / SharePoint / Google Drive connectors
-- Custom extraction schemas per customer
-- Prompt versioning and evaluation harness
-- Audit logs and GDPR retention policies
-- Billing and usage metering for SaaS monetization
-
-## Architecture
-
-```text
-Next.js UI  →  FastAPI API  →  Groq (LLM extraction)  →  PostgreSQL (Neon)
-                     ↓
-              Document parsing (PDF, DOCX, XLSX, TXT)
-```
-
-Monorepo layout: `frontend/` (Next.js app), `backend/` (FastAPI), `samples/` (PDF generators).
-
-```text
-Upload → parse → classify & extract → store → preview + export
-```
+- OAuth / team workspaces
+- Webhooks for processing completion
+- Google Drive / SharePoint connectors
+- Custom extraction schemas per client
+- Prompt versioning + evaluation system
+- Audit logs (enterprise)
+- Billing & usage tracking
 
 ## What This Project Demonstrates
 
 - Full-stack SaaS architecture
-- LLM-powered document extraction
-- Structured data pipelines
-- Production-oriented deployment
-- Enterprise-focused UX
+- LLM-based structured extraction system
+- Production-ready backend design
+- Document processing pipeline at scale
+- API-first product thinking
+- Enterprise-oriented UX patterns
